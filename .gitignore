@@ -1,2 +1,16 @@
 # Google App Engine generated folder
 appengine-generated/
+
+# このリポジトリは公開されているため、個人の作業ファイルや秘密情報は含めない
+.claude/settings.local.json
+.playwright-mcp/
+research_notes/
+reports/
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.p12
+__pycache__/
+*.pyc
