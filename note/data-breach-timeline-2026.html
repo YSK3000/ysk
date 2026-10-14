@@ -1,0 +1,503 @@
+<title>情報漏えい時系列 note原稿</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Layout: 上部に操作バー(タイトル/本文コピー)、下にnote風の原稿プレビューを1カラムで。コピーされるのは #article の中身だけ */
+:root {
+  --bg: #eef1f4;
+  --paper: #ffffff;
+  --ink: #1d2430;
+  --muted: #5d6675;
+  --rule: #d5dbe3;
+  --accent: #1f4fa3;
+  --accent-ink: #ffffff;
+  --tint: #f3f6fa;
+  --ok: #1d7a4a;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --paper: #1a2029; --ink: #e4e8ee; --muted: #9aa4b2; --rule: #2d3542;
+    --accent: #7da6f0; --accent-ink: #0d1420; --tint: #202834; --ok: #6fd19c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --paper: #1a2029; --ink: #e4e8ee; --muted: #9aa4b2; --rule: #2d3542;
+  --accent: #7da6f0; --accent-ink: #0d1420; --tint: #202834; --ok: #6fd19c;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  background: var(--bg);
+  padding-block: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.bar h1 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 0;
+  text-wrap: balance;
+}
+button {
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+}
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.secondary { background: transparent; color: var(--accent); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.status {
+  flex-basis: 100%;
+  font-size: 0.88rem;
+  color: var(--ok);
+  min-height: 1.4em;
+  margin: 0;
+}
+.howto {
+  font-size: 0.92rem;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+}
+.howto ol { margin: 0; padding-left: 1.4em; }
+.label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.titlebox {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.titlebox p#title-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+article#article {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 28px clamp(18px, 5vw, 44px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#article h2 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  line-height: 1.45;
+  margin: 2.2em 0 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--ink);
+  text-wrap: balance;
+}
+#article h2:first-of-type { margin-top: 1.4em; }
+#article h3 {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.5;
+  margin: 1.8em 0 0.5em;
+  text-wrap: balance;
+}
+#article p { margin: 0 0 1em; }
+#article p.entry {
+  background: var(--tint);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+#article blockquote {
+  margin: 0 0 1.2em;
+  padding: 10px 16px;
+  border-left: 4px solid var(--rule);
+  color: var(--muted);
+}
+#article ul, #article ol { margin: 0 0 1em; padding-left: 1.4em; }
+#article li { margin-bottom: 0.3em; }
+#article a { color: var(--accent); }
+#article hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <h1>note原稿(2026年10月14日時点)</h1>
+    <button class="secondary" id="copy-title" type="button">タイトルをコピー</button>
+    <button class="primary" id="copy-body" type="button">本文をコピー</button>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="howto">
+    <ol>
+      <li>「タイトルをコピー」を押して、noteのタイトル欄に貼り付けます。</li>
+      <li>「本文をコピー」を押して、noteの本文欄に貼り付けます。見出し・太字・リンク・箇条書きはそのまま入ります。</li>
+      <li>貼り付け後、見出しが本文扱いになっていたら、noteの「大見出し」「小見出し」を当て直してください。</li>
+    </ol>
+  </div>
+
+  <div class="titlebox">
+    <p class="label">タイトル</p>
+    <p id="title-text">【時系列まとめ】相次ぐ情報漏えい 2026年6月の前史から10月14日まで何が起きたか</p>
+  </div>
+
+  <div>
+    <p class="label">本文(ここから下がコピーされます)</p>
+    <article id="article">
+
+<p>2026年9月の終わりから10月にかけて、企業や自治体から個人情報の漏えいの公表が相次いでいます。焼肉きんぐ、タイムズカー、ローソン、ブックオフ、JR東日本、銀のさら。ニュースで名前を見た方も多いと思います。</p>
+<p>ただ、一つひとつのニュースを追うだけでは、全体として「いつ」「何が」「どんな順番で」起きているのかが見えにくいのも事実です。そこでこの記事では、2026年6月の前史から10月14日までの主な事案を、公表日の順に並べて整理しました。あわせて、時系列から読み取れることと、私たちが今できることをまとめています。</p>
+<blockquote>この記事は、2026年10月14日時点の報道と各社・各機関の発表をもとに整理したものです。件数の多くは「最大」「可能性」を含む暫定値で、単位(件・人・アカウント)も事案ごとに異なります。最新の情報は各社の公式発表をご確認ください。</blockquote>
+
+<h2>この記事の見方</h2>
+<ul>
+<li>日付は「公表日」(社会に知らされた日)の順に並べています。</li>
+<li>「判明」は、組織が不正アクセスに気づいた日、または攻撃を受けた期間です。</li>
+<li>続報は「(○○ 第2報)」のように括弧付きで、公表された日の位置に並べています。</li>
+<li>【政府】【機関】【捜査】は、政府・専門機関・捜査当局の動きです。</li>
+<li>経路の「委託先」「クラウド事業者」は、その組織自身ではなく、業務を任せていた会社やサービスが攻撃を受けたケースです。</li>
+</ul>
+
+<h2>時系列で見る</h2>
+
+<h3>前史(2026年6月〜9月上旬)</h3>
+<p>秋に公表が集中する前から、大規模な事案はすでに起きていました。</p>
+
+<p class="entry"><strong>6/23|KDDI(プロバイダー向けメールシステム)</strong><br>内容:不正アクセスを第1報で公表<br>判明:発生は5/16〜、確認は6/17 / 経路:導入していた第三者製ソフトウェアの悪用</p>
+<p class="entry"><strong>7/6|(KDDI 続報)</strong><br>内容:メールアドレス約1,223万件の漏えいを確認。うち約762万人分はパスワードも漏えい</p>
+<p class="entry"><strong>8/17|さくらインターネット(レンタルサーバ)</strong><br>内容:一部環境での583アカウントへの不正ログインなどを公表<br>判明:8/9に検知</p>
+<p class="entry"><strong>8/19|(さくらインターネット 第2報)</strong><br>内容:販売管理システムにも侵入の可能性。最大136万563アカウントに影響の可能性</p>
+<p class="entry"><strong>8/28|イエローハット(WEB作業予約システム)</strong><br>内容:最大180万1,499人分の顧客情報が漏えいした可能性<br>判明:8/18に検知</p>
+<p class="entry"><strong>9/10|(さくらインターネット 第3報)</strong><br>内容:調査結果と再発防止策を公表。不正アクセスが約3年続いていたことや、初期パスワードが平文で保存されていたことが報じられた</p>
+<p class="entry"><strong>9/11|デジタル庁(政府共通基盤GSS)</strong><br>内容:政府職員などの情報約24.6万件が流出した可能性<br>判明:侵入は5月下旬〜、検知は6/25 / 経路:VPN機器の脆弱性</p>
+
+<h3>第1波(9/16〜9/30)</h3>
+<p>大手ネットサービスの大規模な公表が始まり、月末にかけて物流大手2社が続きました。</p>
+
+<p class="entry"><strong>9/16|Gyazo(画像共有サービス)</strong><br>内容:ユーザー情報約2,362万件、画像のメタデータ約4.9億件が流出。パスワードのハッシュ値も含む<br>判明:侵入は9/11 / 経路:画像アップロード用サーバーの脆弱性</p>
+<p class="entry"><strong>9/25|タイムズカー(第1報)</strong><br>内容:個人情報が漏えいした可能性<br>判明:9/25に検知 / 経路:Webシステムへの不正アクセス</p>
+<p class="entry"><strong>9/25|(Gyazo 第2報)</strong><br>内容:約2,362万件のうち約1,801万件は、メールアドレス未登録の匿名ユーザーと公表</p>
+<p class="entry"><strong>9/28|(タイムズカー 第2報)</strong><br>内容:第三者による情報の取得を確認</p>
+<p class="entry"><strong>9/29|(タイムズカー 第3報)</strong><br>内容:退会者を含む約660万アカウントが対象。うち約160万アカウントは運転免許証画像などの本人確認書類も漏えい</p>
+<p class="entry"><strong>9/29|セイコーマート(セイコーマートアプリ)</strong><br>内容:約57万アカウントの会員情報が流出した可能性<br>判明:9/28に判明(発端は9/24の不正な退会処理)</p>
+<p class="entry"><strong>9/29|ヤマト運輸(クロネコ代金後払いサービス)</strong><br>内容:一部の情報が漏えいした可能性<br>判明:9/28に確認、同日にサービスを停止</p>
+<p class="entry"><strong>9/30|佐川急便(お荷物問い合わせサービス)</strong><br>内容:不正アクセスを公表。約100日分の送り主・届け先の氏名、住所、電話番号などが流出した可能性(件数は調査中)<br>判明:9/30に確認 ※流出の可能性の公表を10/1とする報道もあり</p>
+
+<h3>第2波(10/1〜10/9)</h3>
+<p>10月に入ると公表が一気に増え、特に10/5〜10/9の5日間に集中しました。政府や専門機関も相次いで動いています。</p>
+
+<p class="entry"><strong>10/1|日本原子力研究開発機構(研究支援サイト)</strong><br>内容:175人分(身分証の画像、健康診断結果など)が漏えい<br>判明:9/25に確認 / 経路:不正に作られた利用者IDでログインし、ファイルをダウンロード</p>
+<p class="entry"><strong>10/2|第一生命・第一ライフグループ(人事システム)</strong><br>内容:従業員・退職者約12万人分が流出した可能性(顧客情報への不正アクセスは確認されず)<br>判明:9/24に検知</p>
+<p class="entry"><strong>10/2|(ヤマト運輸 第2報)</strong><br>内容:氏名、住所、電話番号、与信番号、請求金額などが漏えいした可能性</p>
+<p class="entry"><strong>10/5|焼肉きんぐ(公式アプリ/物語コーポレーション)</strong><br>内容:約1,079万件(会員番号、氏名、メールアドレス、電話番号)<br>判明:10/2に確認 / 経路:会員管理システムへの侵入</p>
+<p class="entry"><strong>10/5|infoQ(アンケートサイト/GMOリサーチ&amp;AI)</strong><br>内容:最大94万8,498件(保有する全件)が持ち出された。ポイント約287万円分が不正にギフトコードへ交換<br>判明:10/2以降に不正アクセス、10/3に確認 / 経路:ソフトウェアの脆弱性</p>
+<p class="entry"><strong>10/5|大和証券</strong><br>内容:約11万人分が漏えいした可能性(大和証券本体のシステムへの不正アクセスは確認されず)<br>判明:10/2夜〜10/3朝に不正アクセス / 経路:委託先(スカラコミュニケーションズ)の管理サイトへの不正ログイン</p>
+<p class="entry"><strong>10/5|大阪公立大学</strong><br>内容:サーバー約500台が停止。少なくとも13万人分の情報が流出した恐れ(調査中)<br>判明:10/2未明に障害 / 経路:ランサムウェア</p>
+<p class="entry"><strong>10/6|ミスターマックス(アプリ・オンラインストア)</strong><br>内容:最大173万5,154人分(会員ID、氏名、メールアドレス、電話番号)<br>判明:10/3夕方に確認 / 経路:ソフトウェア機能の不正利用</p>
+<p class="entry"><strong>10/6|旭化成セラピューティクス(医療関係者向けサイト)</strong><br>内容:最大約55万8,700人分(医療従事者など)が漏えいした可能性<br>判明:10/2に委託先から報告 / 経路:委託先(医薬情報ネット)</p>
+<p class="entry"><strong>10/6|シチズン時計</strong><br>内容:約10万人分のお問い合わせ情報が漏えいした可能性<br>経路:委託先(スカラコミュニケーションズ)。大和証券と同じ委託先</p>
+<p class="entry"><strong>10/6|(スカラコミュニケーションズ 続報)</strong><br>内容:最大5社、最大71万3,126件に影響の恐れ</p>
+<p class="entry"><strong>10/6|楽天ドライブ</strong><br>内容:1万5,382アカウント分の保存データなどが取得・閲覧された<br>判明:不正取得は1/29〜9/17ほか / 経路:管理用アカウントの認証情報を不正取得</p>
+<p class="entry"><strong>10/6|【捜査】ランサムウェア集団「Qilin」</strong><br>内容:中心メンバーとみられる男を5月下旬に大阪で拘束していたことが判明(ドイツへ引き渡し)</p>
+<p class="entry"><strong>10/6|【政府】古川サイバー安全保障担当相の会見</strong><br>内容:「パスワードの使い回しをやめる」「多要素認証を使う」「不審なメール・SMSに注意する」の3点を国民に呼びかけ</p>
+<p class="entry"><strong>10/7|損保ジャパン</strong><br>内容:約6万件が漏えいした可能性<br>経路:委託先(スカラコミュニケーションズ)</p>
+<p class="entry"><strong>10/7|IDCフロンティア(IDCFクラウド)</strong><br>内容:495の企業・自治体に影響<br>判明:10/7午前3時40分ごろに攻撃 / 経路:ランサムウェア</p>
+<p class="entry"><strong>10/7|横須賀市(佐川急便の件の関連)</strong><br>内容:ふるさと納税の寄附者の氏名、住所、電話番号が流出した恐れ<br>経路:配送の委託先(佐川急便)</p>
+<p class="entry"><strong>10/7|【政府】個人情報保護委員会</strong><br>内容:事業者向けの注意喚起。強い多要素認証、EDRの導入、不要な個人データの消去などを例示</p>
+<p class="entry"><strong>10/8|第一興商(ビッグエコーなど)</strong><br>内容:約872万件(顧客約863万件、従業員約9万件)が漏えいした恐れ。パスワードは含まれず<br>判明:委託先で10/1〜2に感染が判明、10/5に報告 / 経路:委託先(日本コロムビアグループ)の従業員端末のマルウェア感染</p>
+<p class="entry"><strong>10/8|ローソン(ローソンID)</strong><br>内容:約215万件(氏名、メールアドレスなど)。アプリ予約の26件はカード番号の一部も<br>判明:攻撃は9/12〜14、判明は10/7 / 経路:アプリで本人に情報を表示する仕組みへの不正アクセス</p>
+<p class="entry"><strong>10/8|【機関】JPCERT/CC</strong><br>内容:注意喚起を公開。増えている恐れのある手口として「標的ごとの既知の脆弱性や管理不備の悪用」「スマホアプリを解析して内部APIを不正操作」「BIツールMetabaseの脆弱性の悪用」の3つを公表</p>
+<p class="entry"><strong>10/8|【政府】関係省庁会議</strong><br>内容:企業に脆弱性対策や認証強化などを要請する方針。各省庁は漏えい事案の情報を国家サイバー統括室(NCO)に集約</p>
+<p class="entry"><strong>10/9|skyticket(旅行予約サイト/アドベンチャー)</strong><br>内容:約1,464万件。うち約413万件はハッシュ化されたパスワードも<br>判明:10/2〜4に不正アクセス(別件で9/20にも) / 経路:管理機能の不正操作</p>
+<p class="entry"><strong>10/9|ブックオフ(第1報)</strong><br>内容:最大約643万件(会員番号ベース)。住所、生年月日、パスワードのハッシュ値なども<br>判明:10/6に確認 / 経路:子会社の会員管理システムへの不正アクセス</p>
+<p class="entry"><strong>10/9|ディップ(バイトル・バイトルNEXT)</strong><br>内容:メールアドレス最大388万5,771件が漏えいした可能性<br>判明:10/6に確認 / 経路:Webサイトの一部機能の仕様の不備(アクセス元は海外)</p>
+<p class="entry"><strong>10/9|JR東日本グループ(えきねっと、大人の休日倶楽部、ビューカード)</strong><br>内容:計約609万件(えきねっと約167万件、大人の休日倶楽部約39万件、ビューカードのメールアドレス約403万件)<br>経路:クラウド事業者(IDCフロンティア)への攻撃</p>
+<p class="entry"><strong>10/9|【政府】国家サイバー統括室・経済産業省</strong><br>内容:NCOが対応方針の資料を公表。経産省は企業への注意喚起と情報提供への協力を依頼</p>
+
+<h3>続報期(10/13〜10/14)</h3>
+<p>3連休明けの10/13にも、大型の公表と続報が続きました。目立つのは、委託先やサービス提供事業者を経由した被害です。</p>
+
+<p class="entry"><strong>10/13|(ブックオフ 第2報)</strong><br>内容:対象者を638万3,279人に確定(うち退会会員21万2,371人)。情報が取得されたのは10/4〜10/6</p>
+<p class="entry"><strong>10/13|ライドオンエクスプレス(銀のさら、釜寅、すし上等など)</strong><br>内容:公式サイト・アプリの登録者情報、最大約650万件が漏えいした可能性<br>判明:10/5以降に不正アクセスを検知 / 経路:委託先サーバーの運営会社がランサムウェア被害(10/7に報告)</p>
+<p class="entry"><strong>10/13|JR東海(通販サイト「JR東海MARKET」「いいもの探訪」)</strong><br>内容:約1万5,000件が漏えいした可能性<br>経路:クラウド事業者(IDCフロンティア)への攻撃</p>
+<p class="entry"><strong>10/13|防災情報配信サービス「SpeeCAN RAIDEN」(アルカディア)</strong><br>内容:さいたま市、横須賀市など多数の自治体が公表。メールアドレス最大約313万6,000件、電話番号最大約10万5,000件などが漏えいした可能性<br>判明:10/11に不審な挙動を確認、10/12未明に応急措置 / 経路:自治体が利用する配信サービス事業者への不正アクセス</p>
+<p class="entry"><strong>10/13|(カインドオル 第3報)</strong><br>内容:漏えいの対象者を13万6,464人で確定<br>経路:フィッシングメールでスタッフの認証情報が盗まれた</p>
+
+<h2>数字で見る</h2>
+
+<h3>公表件数の推移(この記事で取り上げた事案)</h3>
+<ul>
+<li>前史(6/23〜9/11):4件</li>
+<li>第1波(9/16〜9/30):5件</li>
+<li>第2波(10/1〜10/9):18件(うち10/5〜10/9の5日間で16件)</li>
+<li>続報期(10/13〜10/14):3件</li>
+</ul>
+<p>続報、政府・機関の動き、関連する自治体の公表は数えていません。また、すべての事案を網羅した集計ではありません。</p>
+<p>東京商工リサーチの集計では、上場企業とその子会社で100万件以上の個人情報漏えい事故は、2026年10月5日時点で10件に達しています。2025年は通年で6件だったので、すでにそれを上回っています。</p>
+
+<h3>規模の大きい事案(公表値)</h3>
+<ol>
+<li>Gyazo:約2,362万件(うち約1,801万件は匿名ユーザー)</li>
+<li>skyticket:約1,464万件</li>
+<li>KDDI:約1,223万件(メールアドレス)</li>
+<li>焼肉きんぐ:約1,079万件</li>
+<li>第一興商:約872万件</li>
+<li>タイムズカー:約660万アカウント</li>
+<li>ライドオンエクスプレス(銀のさらなど):最大約650万件</li>
+<li>ブックオフ:638万3,279人</li>
+<li>JR東日本グループ:計約609万件</li>
+<li>ディップ(バイトル):最大約389万件</li>
+</ol>
+<p>単位(件・人・アカウント)がそろっておらず、重複も含まれるため、単純な比較や合計はできません。</p>
+
+<h2>時系列から読み取れること</h2>
+
+<h3>① 公表は速いが、「気づくまで」が長い事案がある</h3>
+<p>組織が不正アクセスに気づいてから公表するまでの日数を並べると、次のようになります。</p>
+<ul>
+<li><strong>当日〜翌日</strong>:タイムズカー、佐川急便、セイコーマート、ヤマト運輸、ローソン</li>
+<li><strong>2〜4日</strong>:infoQ、SpeeCAN RAIDEN、焼肉きんぐ、ミスターマックス、ブックオフ、ディップ、旭化成セラピューティクス</li>
+<li><strong>5〜10日</strong>:Gyazo、日本原子力研究開発機構、第一興商、第一生命、さくらインターネット、ライドオンエクスプレス、イエローハット</li>
+<li><strong>約2か月半(78日)</strong>:政府共通基盤GSS</li>
+</ul>
+<p>多くの組織は、気づいてから数日以内に公表しています。一方で、気づくまでに時間がかかった事案もあります。さくらインターネットでは不正アクセスが約3年続いていたと報じられ、楽天ドライブでは1月から9月までの不正取得が10月に公表されました。ローソンも、攻撃から判明まで約3週間かかっています。</p>
+<p><strong>筆者の見立て(確度:中)</strong>:まだ気づかれていない被害が、ほかにも残っている可能性があります。</p>
+
+<h3>② 攻撃・判明は10月第1週に集中している</h3>
+<p>10/1〜10/7の1週間に、少なくとも13件の攻撃や判明が重なっています。</p>
+<ul>
+<li>10/1〜2:第一興商の委託先で感染が判明</li>
+<li>10/2:焼肉きんぐ、infoQ、大阪公立大学、旭化成セラピューティクス(委託先からの報告)</li>
+<li>10/2〜3:スカラコミュニケーションズ(大和証券、シチズン時計など)</li>
+<li>10/2〜4:skyticket</li>
+<li>10/3:ミスターマックス</li>
+<li>10/4〜6:ブックオフ</li>
+<li>10/5:ライドオンエクスプレスが検知</li>
+<li>10/6:ディップ</li>
+<li>10/7:IDCフロンティアが攻撃を受ける、ローソンが判明</li>
+</ul>
+<p>手口は脆弱性の悪用、委託先の管理サイトへの不正ログイン、マルウェア、ランサムウェアとさまざまで、同じ攻撃者によるものとは言えません。JPCERT/CCは、攻撃者が標的ごとに異なる脆弱性を調べている可能性を指摘しています。なお、重なっているのは判明した日で、侵入自体はもっと前だったケースもあり得ます。</p>
+
+<h3>③ 1つの委託先から、多くの組織へ広がる</h3>
+<ul>
+<li>スカラコミュニケーションズ → 大和証券、シチズン時計、損保ジャパンなど(最大5社、最大71万3,126件)</li>
+<li>IDCフロンティア → JR東日本グループ、JR東海など(495の企業・自治体に影響)</li>
+<li>アルカディア(SpeeCAN RAIDEN)→ さいたま市、横須賀市など多数の自治体</li>
+<li>佐川急便 → 横須賀市(ふるさと納税)など</li>
+<li>日本コロムビアグループ → 第一興商</li>
+<li>医薬情報ネット → 旭化成セラピューティクス</li>
+</ul>
+<p>横須賀市は、佐川急便とSpeeCAN RAIDENという別々のルートで、2度影響を受けています。自社のシステムを守っていても、情報を預けた先が攻撃されれば漏えいは起こります。</p>
+
+<h3>④ 政府・専門機関は10/6〜10/9に一斉に動いた</h3>
+<ul>
+<li>10/6:古川サイバー安全保障担当相の会見</li>
+<li>10/7:個人情報保護委員会の注意喚起</li>
+<li>10/8:JPCERT/CCの注意喚起、関係省庁会議</li>
+<li>10/9:国家サイバー統括室・経済産業省</li>
+</ul>
+<p>公表が急増した10/5の翌日から、4日間で一斉に動いています。</p>
+
+<h3>⑤ パスワードに関わる情報も漏れている</h3>
+<p>連絡先だけでなく、パスワードに関わる情報が含まれる事案もあります。</p>
+<ul>
+<li>KDDI:約762万人分のパスワード</li>
+<li>Gyazo、skyticket(約413万件)、ブックオフ、ライドオンエクスプレス:パスワードのハッシュ値</li>
+</ul>
+<p>ハッシュ化されていても、短いパスワードや単純なパスワードは解読される恐れがあります。同じパスワードを他のサービスで使い回していると、そちらにも不正ログインされる危険があります。</p>
+
+<h2>なぜ今、相次いでいるのか</h2>
+<p>NHKの報道によると、セキュリティ会社は7月以降の被害の増加から、サイバー攻撃にAIが悪用されている可能性が高いと指摘しています。マクニカの担当者は、これほど個人情報の流出が相次いだ記憶はなく「異様な状況」だと述べています。</p>
+<p>一方でマクニカの分析では、AIによってゼロデイ脆弱性(未公表の脆弱性)が悪用されている状況は確認されていないとしています。実際に起きているのは、アクセス権や設定、認証などの基礎的な不備や、既知の脆弱性を幅広く探って悪用する動きだということです。</p>
+<p><strong>筆者の見立て(確度:中)</strong>:「AIが新しい穴を見つけた」というより、「AIなどで偵察や解析の手間が減り、昔からある穴が一斉に突かれている」と見るのが自然だと考えます。ただし、原因は各社が調査中で、確定していません。</p>
+
+<h2>これからの見通し(筆者の見立て)</h2>
+<ul>
+<li><strong>委託先・クラウド経由の公表は続く(確度:高)</strong>:IDCフロンティアの影響先だけで495の企業・自治体があり、10/13にも経由型の公表が相次ぎました。</li>
+<li><strong>流出したパスワードを使った不正ログインが、他のサービスで試される(確度:中)</strong>:パスワードのハッシュ値を含む事案が複数あります。</li>
+<li><strong>便乗した詐欺メール・SMSの被害が表に出てくる(確度:中)</strong>:各社とも現時点で二次被害は確認されていないとしていますが、詐欺の被害が統計に表れるまでには時間差があります。</li>
+<li><strong>制度の見直しが進む(確度:中)</strong>:個人情報保護委員会は、2027年4月に確定予定の安全管理措置の見直し内容を前倒しで示しました。</li>
+</ul>
+
+<h2>私たちが今できること</h2>
+<ol>
+<li>自分が使っているサービスが対象か、公式サイトで確認する(メールやSMSのリンクからは開かない)</li>
+<li>対象のサービスと同じパスワードを他でも使っているなら、他のサービス側も変更する</li>
+<li>多要素認証(またはパスキー)を設定する</li>
+<li>「お詫び」「補償」「ポイント付与」をうたうメール・SMS・電話は、公式の窓口で確認してから対応する</li>
+<li>運転免許証などの本人確認書類が漏れた可能性がある場合は、身に覚えのない契約や口座開設の連絡に注意する</li>
+</ol>
+
+<h2>おわりに</h2>
+<p>これだけの規模の漏えいが短期間に続くと、「自分の情報はもうどこかに出ているかもしれない」と考えておくほうが現実的です。大切なのは、漏れたあとの被害を小さくすることです。パスワードの使い回しをやめることと、届いた連絡をまず疑うこと。この2つだけでも、守れるものは大きく変わります。</p>
+<p>なお、この記事は特定の企業や自治体を批判するためのものではありません。被害を公表した組織も、攻撃を受けた側です。</p>
+
+<hr>
+
+<h2>参考資料</h2>
+<ul>
+<li><a href="https://www.sakigake.jp/news/article/20260706CO0109/">パスワード漏れ762万人 KDDI、不正アクセス問題で(秋田魁新報)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2608/20/news036.html">さくらインターネット、不正アクセス第二報(@IT)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2609/11/news039.html">さくらインターネット、3年続いた不正アクセス(@IT)</a></li>
+<li><a href="https://kumanichi.com/articles/2030054">イエローハット顧客情報漏えいか 180万人分(熊本日日新聞)</a></li>
+<li><a href="https://www.digital.go.jp/news/2026-0911-01">デジタル庁 発表(2026年9月11日)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2609/14/news038.html">政府共通基盤GSSで24.6万件が漏えいか(@IT)</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2609/16/2000001560/">Gyazoに不正アクセス ユーザー情報約2362万件(ITmedia NEWS)</a></li>
+<li><a href="https://scan.netsecurity.ne.jp/article/2026/09/28/56313.html">Gyazo 約2,362万件のユーザーに関するデータが流出(ScanNetSecurity)</a></li>
+<li><a href="https://share.timescar.jp/news/2026/0929/1816.html">タイムズカー お知らせ(第3報)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/spv/2609/30/news038.html">タイムズカーで不正アクセス 約660万件(@IT)</a></li>
+<li><a href="https://scan.netsecurity.ne.jp/article/2026/10/02/56373.html">セイコーマートアプリに不正アクセス(ScanNetSecurity)</a></li>
+<li><a href="https://ecnomikata.com/ecnews/51854/">ヤマト運輸 クロネコ代金後払いサービス(ECのミカタ)</a></li>
+<li><a href="https://ecnomikata.com/ecnews/51852/">佐川急便 不正アクセス 第1報〜第3報(ECのミカタ)</a></li>
+<li><a href="https://rocket-boys.co.jp/security-measures-lab/sagawa_cyberattack_affected_companies_yokosuka/">佐川急便の件の影響(横須賀市ほか)(セキュリティ対策Lab)</a></li>
+<li><a href="https://kumanichi.com/articles/2041826">日本原子力機構に不正アクセス(熊本日日新聞)</a></li>
+<li><a href="https://innovatopia.jp/cyber-security/cyber-security-news/118602/">第一ライフグループ・第一生命 約12万人(Innovatopia)</a></li>
+<li><a href="https://rocket-boys.co.jp/?p=42522">焼肉きんぐ 公式アプリに不正アクセス(セキュリティ対策Lab)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2610/07/news035.html">infoQでポイント286万円分も不正交換(@IT)</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2610/07/news030.html">大和証券約11万人の情報に不正アクセス(@IT)</a></li>
+<li><a href="https://kumanichi.com/articles/2044799">大阪公立大が対面授業再開 ランサム攻撃で障害続く(熊本日日新聞)</a></li>
+<li><a href="https://rocket-boys.co.jp/?p=42595">ミスターマックス 最大約173万件(セキュリティ対策Lab)</a></li>
+<li><a href="https://rocket-boys.co.jp/?p=42688">旭化成セラピューティクス「Pharma DIGITAL」(セキュリティ対策Lab)</a></li>
+<li><a href="https://rocket-boys.co.jp/?p=42649">シチズン時計、委託先スカラコミュニケーションズへの不正アクセス(セキュリティ対策Lab)</a></li>
+<li><a href="https://scan.netsecurity.ne.jp/article/2026/10/08/56411.html">楽天ドライブに不正アクセス(ScanNetSecurity)</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2610/07/2000002093/">国際的ハッカー集団「Qilin」中心メンバーを大阪で拘束(ITmedia NEWS)</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2610/07/2000002099/">損保ジャパン、約6万件漏えいか(ITmedia NEWS)</a></li>
+<li><a href="https://scan.netsecurity.ne.jp/article/2026/10/09/56426.html">「IDCFクラウド」にランサムウェア攻撃(ScanNetSecurity)</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2610/08/2000002115/">漏えい相次ぐ中、保護委が対策を緊急例示(ITmedia NEWS)</a></li>
+<li><a href="https://internet.watch.impress.co.jp/docs/news/2147032.html">第一興商 個人情報漏えいのおそれ(INTERNET Watch)</a></li>
+<li><a href="https://scan.netsecurity.ne.jp/article/2026/10/13/56434.html">ローソンのアカウントサービスに不正アクセス(ScanNetSecurity)</a></li>
+<li><a href="https://ascii.jp/elem/000/004/441/4441170/">JPCERT/CC、3つの攻撃手法を公表(ASCII.jp)</a></li>
+<li><a href="https://www.chunichi.co.jp/article/1322693">企業に脆弱性対策要請へ 政府、不正アクセス続出で(中日新聞)</a></li>
+<li><a href="https://ryukyushimpo.jp/kyodo/entry-5541603.html">政府、情報漏えいで会議へ(共同通信/琉球新報)</a></li>
+<li><a href="https://www.watch.impress.co.jp/docs/news/2147072.html">skyticket 不正アクセス(Impress Watch)</a></li>
+<li><a href="https://kumanichi.com/articles/2044802">ブックオフに不正アクセス 643万件(熊本日日新聞)</a></li>
+<li><a href="https://www.release.tdnet.info/inbs/140120261013549865.pdf">ブックオフグループホールディングス お詫びとお知らせ(第2報)</a></li>
+<li><a href="https://rocket-boys.co.jp/?p=43191">ディップ「バイトル」への不正アクセス(セキュリティ対策Lab)</a></li>
+<li><a href="https://www.jreast.co.jp/press/2026/20261009_ho02.pdf">JR東日本 プレスリリース(2026年10月9日)</a></li>
+<li><a href="https://www.cyber.go.jp/pdf/press/taiou.pdf">不正アクセスによる漏えい等の事案を踏まえた対応について(国家サイバー統括室)</a></li>
+<li><a href="https://www.meti.go.jp/policy/netsecurity/pdf/20261009_chuuikanki.pdf">注意喚起及び情報提供に係る協力依頼(経済産業省)</a></li>
+<li><a href="https://internet.watch.impress.co.jp/docs/news/2147767.html">「銀のさら」「釜寅」「すし上等」のライドオンエクスプレス(INTERNET Watch)</a></li>
+<li><a href="https://www.nippon.com/ja/news/yjj2026101300974/">「銀のさら」運営会社、最大650万件漏えいか JR東海1万5000件(時事通信/nippon.com)</a></li>
+<li><a href="https://rocket-boys.co.jp/security-measures-lab/jr-central-market-iimono-tanbou-idcf-15000-2026/">JR東海、通販サイトで約1万5,000件(セキュリティ対策Lab)</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2610/14/2000002239/">さいたま市や横須賀市など、防災情報配信システムに不正アクセス(ITmedia NEWS)</a></li>
+<li><a href="https://www.city.yokosuka.kanagawa.jp/0525/nagekomi/20261013_roueinoosore.html">横須賀市 防災情報メール等における個人情報の漏えいのおそれについて</a></li>
+<li><a href="https://www.nikkei.com/markets/ir/irftp/data/tdnr/tdnetg3/20261013/g6fa4c/140120261013549468.pdf">カインドオル 調査結果及び再発防止策について(第三報)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/9c6fa2c3fe91a88390ed8b455d31c80e25123daf">上場企業「個人情報漏えい」、過去最悪ペース(東京商工リサーチ/Yahoo!ニュース)</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261007de56001">個人情報流出なぜ相次ぐ 専門家“異様な状況”AI悪用の可能性(NHK)</a></li>
+<li><a href="https://security.macnica.co.jp/blog/2026/10/web-incidents2026.html">相次ぐWEBシステムからの情報漏洩事案について(マクニカ)</a></li>
+</ul>
+
+    </article>
+  </div>
+</div>
+
+<script>
+(function () {
+  var statusEl = document.getElementById('status');
+  function say(msg) {
+    statusEl.textContent = msg;
+  }
+
+  function selectNode(el) {
+    var sel = window.getSelection();
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function cleanHtml(el) {
+    var clone = el.cloneNode(true);
+    clone.querySelectorAll('*').forEach(function (n) {
+      Array.prototype.slice.call(n.attributes).forEach(function (a) {
+        if (a.name !== 'href') n.removeAttribute(a.name);
+      });
+    });
+    return '<meta charset="utf-8">' + clone.innerHTML;
+  }
+
+  function fallbackCopy(el, label) {
+    selectNode(el);
+    var done = false;
+    try { done = document.execCommand('copy'); } catch (e) { done = false; }
+    if (done) {
+      say(label + 'をコピーしました。noteに貼り付けてください。');
+    } else {
+      say(label + 'を選択しました。Ctrl+C(Macは⌘+C)でコピーしてください。');
+    }
+  }
+
+  document.getElementById('copy-body').addEventListener('click', function () {
+    var el = document.getElementById('article');
+    var html = cleanHtml(el);
+    var text = el.innerText;
+    try {
+      if (!navigator.clipboard || typeof window.ClipboardItem === 'undefined') throw new Error('no clipboard');
+      var item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' })
+      });
+      navigator.clipboard.write([item]).then(function () {
+        say('本文をコピーしました(見出し・太字・リンク付き)。noteの本文欄に貼り付けてください。');
+      }, function () {
+        fallbackCopy(el, '本文');
+      });
+    } catch (e) {
+      fallbackCopy(el, '本文');
+    }
+  });
+
+  document.getElementById('copy-title').addEventListener('click', function () {
+    var el = document.getElementById('title-text');
+    var text = el.textContent;
+    try {
+      if (!navigator.clipboard) throw new Error('no clipboard');
+      navigator.clipboard.writeText(text).then(function () {
+        say('タイトルをコピーしました。noteのタイトル欄に貼り付けてください。');
+      }, function () {
+        fallbackCopy(el, 'タイトル');
+      });
+    } catch (e) {
+      fallbackCopy(el, 'タイトル');
+    }
+  });
+})();
+</script>
