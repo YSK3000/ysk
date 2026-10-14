@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/fonts/node_modules/@fontsource/zen-kaku-gothic-new/900.css">
+<link rel="stylesheet" href="/fonts/node_modules/@fontsource/zen-kaku-gothic-new/700.css">
+<link rel="stylesheet" href="/fonts/node_modules/@fontsource/ibm-plex-mono/500.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1280px; height: 670px; overflow: hidden; position: relative;
+    background: #0d1626; color: #eef2f8;
+    font-family: "Zen Kaku Gothic New", "IPAGothic", sans-serif;
+  }
+  .kicker {
+    position: absolute; left: 80px; top: 62px;
+    font-family: "IBM Plex Mono", monospace; font-size: 20px; letter-spacing: 0.14em; color: #8fa1bb;
+  }
+  h1 {
+    position: absolute; left: 76px; top: 98px; margin: 0;
+    font-weight: 900; font-size: 92px; line-height: 1.16; letter-spacing: 0.02em;
+  }
+  h1 span { color: #f3b33d; }
+  svg { position: absolute; left: 0; top: 0; }
+  .note {
+    position: absolute; right: 80px; top: 70px; text-align: right;
+    font-weight: 700; font-size: 19px; line-height: 1.6; color: #8fa1bb;
+  }
+</style>
+</head>
+<body>
+  <div class="kicker">2026.06 → 10.14 ／ TIMELINE</div>
+  <h1>相次ぐ情報漏えい<br><span>時系列まとめ</span></h1>
+  <div class="note">棒の高さ＝1日あたりの新規公表件数<br>(本記事で取り上げた30件)</div>
+  <svg id="chart" width="1280" height="670" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+  const data = {
+    "2026-06-23": 1, "2026-08-17": 1, "2026-08-28": 1, "2026-09-11": 1,
+    "2026-09-16": 1, "2026-09-25": 1, "2026-09-29": 2, "2026-09-30": 1,
+    "2026-10-01": 1, "2026-10-02": 1, "2026-10-05": 4, "2026-10-06": 4,
+    "2026-10-07": 2, "2026-10-08": 2, "2026-10-09": 4, "2026-10-13": 3
+  };
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("chart");
+  const start = Date.UTC(2026, 5, 1), end = Date.UTC(2026, 9, 16);
+  const x0 = 80, x1 = 1200, base = 566, unit = 34, bw = 7;
+  const sx = t => x0 + (t - start) / (end - start) * (x1 - x0);
+  const el = (name, attrs, text) => {
+    const n = document.createElementNS(NS, name);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text) n.textContent = text;
+    svg.appendChild(n);
+    return n;
+  };
+  // month gridlines and labels
+  [[5, "6月"], [6, "7月"], [7, "8月"], [8, "9月"], [9, "10月"]].forEach(([m, label]) => {
+    const x = sx(Date.UTC(2026, m, 1));
+    el("line", { x1: x, y1: 400, x2: x, y2: base, stroke: "#1f2c42", "stroke-width": 1 });
+    el("text", { x: x, y: base + 34, fill: "#6f819c", "font-size": 20, "font-family": "Zen Kaku Gothic New", "font-weight": 700 }, label);
+  });
+  // baseline up to 10/14, dashed after
+  const today = sx(Date.UTC(2026, 9, 14));
+  el("line", { x1: x0, y1: base, x2: today, y2: base, stroke: "#46587a", "stroke-width": 2 });
+  el("line", { x1: today, y1: base, x2: x1, y2: base, stroke: "#46587a", "stroke-width": 2, "stroke-dasharray": "3 5" });
+  el("text", { x: today, y: base + 34, fill: "#c9d3e3", "font-size": 18, "font-family": "IBM Plex Mono", "text-anchor": "middle" }, "10/14");
+  // bars as stacked segments
+  for (const d in data) {
+    const [y, m, dd] = d.split("-").map(Number);
+    const x = sx(Date.UTC(y, m - 1, dd));
+    for (let i = 0; i < data[d]; i++) {
+      el("rect", { x: x - bw / 2, y: base - (i + 1) * unit + 3, width: bw, height: unit - 6, rx: 1.5, fill: "#f3b33d" });
+    }
+  }
+  // cluster label for 10/5-10/9
+  const cx = sx(Date.UTC(2026, 9, 5)), cx2 = sx(Date.UTC(2026, 9, 9));
+  el("line", { x1: cx - 6, y1: base - 4 * unit - 14, x2: cx2 + 6, y2: base - 4 * unit - 14, stroke: "#f3b33d", "stroke-width": 2 });
+  el("text", { x: cx2 + 6, y: base - 4 * unit - 28, fill: "#f3b33d", "font-size": 24, "font-family": "Zen Kaku Gothic New", "font-weight": 900, "text-anchor": "end" }, "10/5〜9日の5日間で16件");
+</script>
+</body>
+</html>
