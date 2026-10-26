@@ -502,6 +502,9 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
   .topbar { gap: 10px; padding: 0 10px; height: 54px; }
   .brand-text, .clock, .tm-label { display: none; }
   .net-chip { padding: 4px 8px; }
+  .top-mid .net-chip { display: none; }
+  .live-text { white-space: nowrap; }
+  .tm-name { letter-spacing: .04em; }
   .body { flex-direction: column-reverse; }
   .sidenav { width: auto; flex-direction: row; border-right: 0; border-top: 1px solid var(--line); padding: 0; overflow-x: auto; }
   .nav-item { flex: 1 0 64px; border-left: 0; border-top: 2px solid transparent; padding: 8px 2px; }
@@ -513,3 +516,11 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
   .check-list li { grid-template-columns: 1fr; }
   .ck-st { justify-self: start; padding: 2px 8px; }
 }
+
+.monitor-strip { padding: 9px 18px; background: #102c2c; color: #a4e1cf; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.monitor-strip.warn { background: #392c15; color: #ffcc75; }
+
+.coverage-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+.coverage-panel { margin-bottom: var(--gap); }
+.coverage-card { border:1px solid var(--line); border-radius:8px; padding:12px; }
+.coverage-card p { font-size:12px; line-height:1.5; }

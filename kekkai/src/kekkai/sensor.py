@@ -290,10 +290,11 @@ def dump_btm(plat: Any) -> None:
     """Snapshot login/background items (needs root; sfltool returns nothing otherwise) for the dashboard."""
     try:
         items = plat.background_items()
-        if items:
-            atomic_write(str(state_dir() / "btm.json"),
-                         json.dumps({"ts": time.time(), "items": items}, ensure_ascii=False).encode(), 0o644)
-    except Exception as e:  # noqa: BLE001  keep the keeper thread alive on any collect/serialize/write error
+        if not isinstance(items, list):
+            raise ValueError("background items must be a list")
+        atomic_write(str(state_dir() / "btm.json"),
+                     json.dumps({"ts": time.time(), "items": items}, ensure_ascii=False).encode(), 0o644)
+    except Exception as e:  # noqa: BLE001  keep heartbeat alive on collect/serialize/write errors
         log.debug("btm dump failed: %s", e)
 
 

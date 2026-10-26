@@ -29,6 +29,7 @@ let worldCache = null;
 export async function loadWorld() {
   if (!worldCache) {
     const r = await fetch("/static/data/world.json", { credentials: "same-origin" });
+    if (!r.ok) throw new Error("地図データを取得できません");
     worldCache = await r.json();
   }
   return worldCache;
@@ -131,7 +132,9 @@ export class WorldMap {
     this.nodeEls = new Map();
     this.home = null;
     this.bindZoom();
-    loadWorld().then((w) => this.drawCountries(w)).catch(() => {});
+    loadWorld().then((w) => this.drawCountries(w)).catch(() => {
+      this.root.appendChild(h("div", { class: "muted small" }, "地図データ未取得。通信一覧でIP・プロセスを確認できます。"));
+    });
   }
 
   controls() {
@@ -153,7 +156,9 @@ export class WorldMap {
   }
 
   setHome(home) {
-    if (!home || home.lat == null) return;
+    if (!home || home.lat == null || home.lon == null) {
+      this.home = null; this.homeKey = null; clear(this.gHome); return;
+    }
     const key = `${home.lat},${home.lon}`;
     if (this.homeKey === key) return;
     this.homeKey = key;
@@ -217,7 +222,7 @@ export class WorldMap {
         const d = arcPath(this.home, [x, y]);
         rec.arc.setAttribute("d", d);
         rec.flow.setAttribute("d", d);
-      }
+      } else { rec.arc.removeAttribute("d"); rec.flow.removeAttribute("d"); }
       rec.arc.setAttribute("class", `wm-arc ${riskCls}`);
       rec.flow.setAttribute("class", `wm-flow ${riskCls}${n.inbound ? " inbound" : ""}`);
     }

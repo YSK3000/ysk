@@ -209,6 +209,32 @@ class StateDirTest(unittest.TestCase):
             self.assertTrue(os.path.isdir(os.path.join(d, "mystery")))
             self.assertFalse(os.path.exists(os.path.join(d, "heartbeat")))
 
+    def test_clean_state_dir_preserves_unrelated_files_and_symlinks(self):
+        from kekkai import service
+        with tempfile.TemporaryDirectory() as parent:
+            d = sensor.Path(parent) / "state"
+            d.mkdir()
+            note = d / "my-notes.txt"
+            note.write_text("keep")
+            target = sensor.Path(parent) / "outside.txt"
+            target.write_text("keep outside")
+            (d / "heartbeat").symlink_to(target)
+            service.clean_state_dir(d)
+            self.assertEqual(note.read_text(), "keep")
+            self.assertEqual(target.read_text(), "keep outside")
+            self.assertTrue((d / "heartbeat").is_symlink())
+
+    def test_clean_state_dir_does_not_follow_directory_symlink(self):
+        from kekkai import service
+        with tempfile.TemporaryDirectory() as parent:
+            target = sensor.Path(parent) / "outside"
+            target.mkdir()
+            (target / "btm.json").write_text("keep")
+            link = sensor.Path(parent) / "sensor-link"
+            link.symlink_to(target, target_is_directory=True)
+            service.clean_state_dir(link)
+            self.assertEqual((target / "btm.json").read_text(), "keep")
+
 
 class FakeTcpdump:
     """A stand-in tcpdump script so run() can be tested end to end without root."""
@@ -303,6 +329,25 @@ class RunLoopTest(unittest.TestCase):
 
 
 class ServiceTest(unittest.TestCase):
+    def test_btm_write_failure_does_not_kill_heartbeat(self):
+        plat = mock.Mock()
+        plat.background_items.return_value = [{"identifier": "test.item"}]
+        stop = mock.Mock()
+        stop.wait.side_effect = [False, False, True]
+        cap = mock.Mock()
+        cap.alive.return_value = True
+        with mock.patch.object(sensor, "atomic_write", side_effect=OSError("disk unavailable")), \
+                mock.patch.object(sensor, "_beat") as beat:
+            sensor._keeper(stop, "unused", {"cap": cap}, plat, None)
+        self.assertEqual(beat.call_count, 2)
+
+    def test_empty_btm_snapshot_replaces_old_items(self):
+        plat = mock.Mock()
+        plat.background_items.return_value = []
+        with mock.patch.object(sensor, "atomic_write") as write:
+            sensor.dump_btm(plat)
+        self.assertEqual(json.loads(write.call_args.args[1])["items"], [])
+
     def test_daemon_runs_root_owned_copy_in_isolated_mode(self):
         from kekkai import service
         with tempfile.TemporaryDirectory() as d:

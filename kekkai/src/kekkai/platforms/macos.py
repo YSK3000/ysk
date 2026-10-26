@@ -561,6 +561,14 @@ class MacOSPlatform(Platform):
         self._sig_cache: Dict[Tuple[str, float, int], Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._netstat_flags: Optional[List[str]] = None
+        self._sig_jobs: set = set()
+
+    @staticmethod
+    def _required(command: List[str], timeout: float = 15) -> str:
+        rc, out, err = run(command, timeout=timeout)
+        if rc != 0:
+            raise RuntimeError("%s の取得失敗 (終了コード %s): %s" % (command[0], rc, (err or "出力なし")[:180]))
+        return out
 
     def hardware_ports(self) -> Dict[str, str]:
         if self._hw_ports is None:
@@ -569,12 +577,12 @@ class MacOSPlatform(Platform):
         return self._hw_ports
 
     def interfaces(self) -> List[Interface]:
-        rc, out, _ = run(["ifconfig", "-a"], timeout=10)
-        return parse_ifconfig(out, self.hardware_ports()) if rc == 0 else []
+        out = self._required(["ifconfig", "-a"], timeout=10)
+        return parse_ifconfig(out, self.hardware_ports())
 
     def lan_context(self) -> LanContext:
-        rc, out, _ = run(["netstat", "-rn", "-f", "inet"], timeout=10)
-        gateway_for, default_via = parse_netstat_routes(out) if rc == 0 else ({}, None)
+        out = self._required(["netstat", "-rn", "-f", "inet"], timeout=10)
+        gateway_for, default_via = parse_netstat_routes(out)
         ctx = pick_lan(self.interfaces(), gateway_for, default_via)
         if ctx.gateway:
             for n in self.neighbors():
@@ -584,19 +592,26 @@ class MacOSPlatform(Platform):
         return ctx
 
     def neighbors(self) -> List[Neighbor]:
-        rc, out, _ = run(["arp", "-an"], timeout=15)
-        return parse_arp(out) if rc == 0 else []
+        return parse_arp(self._required(["arp", "-an"], timeout=15))
 
     def _netstat(self, proto: str) -> str:
         if self._netstat_flags is None:
-            rc, _, err = run(["netstat", "-anvW", "-p", "tcp"], timeout=15)
+            rc, out, err = run(["netstat", "-anvW", "-p", proto], timeout=15)
             self._netstat_flags = ["-anvW"] if rc == 0 else ["-anv"]
-        rc, out, _ = run(["netstat"] + self._netstat_flags + ["-p", proto], timeout=15)
-        return out if rc == 0 else ""
+            if rc == 0:
+                return out
+        return self._required(["netstat"] + self._netstat_flags + ["-p", proto], timeout=15)
 
     def connections(self) -> List[Connection]:
-        conns = parse_netstat_sockets(self._netstat("tcp")) + parse_netstat_sockets(self._netstat("udp"))
-        if conns and not any(c.pid for c in conns):
+        conns = []
+        for proto in ("tcp", "udp"):
+            output = self._netstat(proto)
+            parsed = parse_netstat_sockets(output)
+            if not parsed and re.search(r"^\s*(tcp|udp)[46]?\s", output, re.M):
+                raise RuntimeError("netstat %s の通信行を解析できません" % proto)
+            conns.extend(parsed)
+        active = [c for c in conns if c.state in ("ESTABLISHED", "SYN_SENT", "SYN_RECEIVED")]
+        if any(c.pid is None for c in active):
             self._fill_pids_from_lsof(conns)
         procs = self.processes()
         for c in conns:
@@ -608,26 +623,23 @@ class MacOSPlatform(Platform):
         return conns
 
     def _fill_pids_from_lsof(self, conns: List[Connection]) -> None:
-        rc, out, _ = run(["lsof", "+c", "0", "-nP", "-iTCP", "-iUDP", "-FpcuPnT"], timeout=20)
+        rc, out, _ = run(["lsof", "+c", "0", "-nP", "-iTCP", "-iUDP", "-FpcuPnT"], timeout=3)
         if rc not in (0, 1):
             return
         index = {(c.proto, c.lport, c.rport, c.raddr): c for c in parse_lsof(out)}
         for c in conns:
             hit = index.get((c.proto, c.lport, c.rport, c.raddr))
-            if hit:
+            if hit and c.pid is None:
                 c.pid, c.process, c.uid = hit.pid, hit.process, hit.uid
 
     def processes(self) -> Dict[int, ProcInfo]:
-        rc, out, _ = run(["ps", "-axo", "pid=,ppid=,uid=,comm="], timeout=15)
-        return parse_ps(out) if rc == 0 else {}
+        return parse_ps(self._required(["ps", "-axo", "pid=,ppid=,uid=,comm="], timeout=15))
 
     def dns_servers(self) -> List[str]:
-        rc, out, _ = run(["scutil", "--dns"], timeout=10)
-        return parse_scutil_dns(out) if rc == 0 else []
+        return parse_scutil_dns(self._required(["scutil", "--dns"], timeout=10))
 
     def proxies(self) -> Dict[str, Any]:
-        rc, out, _ = run(["scutil", "--proxy"], timeout=10)
-        return proxy_summary(parse_scutil_proxy(out)) if rc == 0 else {}
+        return proxy_summary(parse_scutil_proxy(self._required(["scutil", "--proxy"], timeout=10)))
 
     def os_version(self) -> Optional[str]:
         # sw_vers, not platform.mac_ver(): Pythons built with an old SDK are told "10.16" by the compat shim
@@ -651,8 +663,34 @@ class MacOSPlatform(Platform):
         rc, _, err = run(["codesign", "-dv", "--verbose=2", path], timeout=10)
         info = parse_codesign(rc, err) if rc != 127 else {"checked": False, "error": "codesign missing"}
         with self._lock:
+            if len(self._sig_cache) >= 2048:
+                self._sig_cache.clear()
             self._sig_cache[key] = info
         return info
+
+    def code_signature_cached(self, path: str) -> Dict[str, Any]:
+        """Never block socket polling on codesign; at most two checks run at once."""
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return {"checked": False, "error": "missing"}
+        key = (path, stat.st_mtime, stat.st_size)
+        with self._lock:
+            if key in self._sig_cache:
+                return self._sig_cache[key]
+            if path in self._sig_jobs or len(self._sig_jobs) >= 2:
+                return {"checked": False, "pending": True}
+            self._sig_jobs.add(path)
+
+        def check() -> None:
+            try:
+                self.code_signature(path)
+            finally:
+                with self._lock:
+                    self._sig_jobs.discard(path)
+
+        threading.Thread(target=check, daemon=True, name="kekkai-codesign").start()
+        return {"checked": False, "pending": True}
 
     def persistence_items(self) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []

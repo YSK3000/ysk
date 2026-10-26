@@ -29,7 +29,7 @@ from kekkai.platforms.base import Connection, LanContext
 from kekkai.store import Store
 from kekkai.util import FetchError, log
 
-DEFAULT_HOME = {"lat": 35.6812, "lon": 139.7671, "label": "HOME", "source": "default"}
+DEFAULT_HOME = {"lat": None, "lon": None, "label": "HOME", "source": "unknown"}
 
 
 class EventBus:
@@ -80,6 +80,7 @@ class Monitor:
         self.lock = threading.RLock()
         self._stop = threading.Event()
         self._threads: List[threading.Thread] = []
+        self._lifecycle_lock = threading.Lock()
         self._intel_cache: Dict[str, Tuple[float, Dict[str, Any], List[Dict[str, Any]]]] = {}
         self._intel_epoch = 0.0
         self._prev_net: Optional[Dict[str, Any]] = self.store.kv_get("last_network")
@@ -119,7 +120,10 @@ class Monitor:
 
     def _safe(self, name: str, fn: Callable[[], Any], default: Any) -> Any:
         try:
-            return fn()
+            result = fn()
+            with self.lock:
+                self.state["health"].setdefault("collectors", {}).pop(name, None)
+            return result
         except Exception as e:  # noqa: BLE001 - a broken collector must never kill the monitor
             log.exception("collector %s failed", name)
             with self.lock:
@@ -222,9 +226,10 @@ class Monitor:
                     risk = max(risk, r)
                     flags.append(t["feed"])
                 if c.path:
-                    sig = self.platform.code_signature(c.path)
+                    lookup = getattr(self.platform, "code_signature_cached", self.platform.code_signature)
+                    sig = lookup(c.path)
+                    d["signature"] = sig
                     if sig.get("checked"):
-                        d["signature"] = sig
                         if not sig.get("signed"):
                             risk = max(risk, 2)
                             flags.append("unsigned")
@@ -274,6 +279,13 @@ class Monitor:
         conns = self._safe("connections", p.connections, [])
         dns = self._safe("dns", p.dns_servers, [])
         proxies = self._safe("proxies", p.proxies, {})
+        with self.lock:
+            failures = {k: v for k, v in self.state["health"].get("collectors", {}).items()
+                        if k in ("lan_context", "neighbors", "connections", "dns", "proxies")}
+        if failures:
+            # Keep the last successful snapshot and baselines; an empty result from
+            # a failed command is not evidence that a connection or setting disappeared.
+            raise RuntimeError("収集失敗: " + "; ".join("%s: %s" % item for item in failures.items()))
         neigh_dicts = [n.to_dict() for n in neighbors if n.mac]
         net = self.resolve_network(ctx, [n["mac"] for n in neigh_dicts])
         net_id = net["id"]
@@ -567,10 +579,8 @@ class Monitor:
     def sensor_cycle(self) -> None:
         from kekkai.sensor import state_dir
         spool = str(state_dir() / "events.jsonl")
-        beat = str(state_dir() / "heartbeat")
-        active = os.path.exists(beat) and time.time() - os.path.getmtime(beat) < 30
         with self.lock:
-            self.state["sensor"] = {"active": active, "last_beat": os.path.getmtime(beat) if os.path.exists(beat) else None}
+            self.state["sensor"] = self.sensor_status()
         if not os.path.exists(spool):
             return
         size = os.path.getsize(spool)
@@ -636,14 +646,47 @@ class Monitor:
             self.jobs.pop(k, None)
 
     # ------------------------------------------------------------ views
+    def sensor_status(self) -> Dict[str, Any]:
+        from kekkai.sensor import state_dir
+        try:
+            last = (state_dir() / "heartbeat").stat().st_mtime
+        except OSError:
+            last = None
+        return {"active": last is not None and 0 <= time.time() - last < 30, "last_beat": last}
+
     def summary(self) -> Dict[str, Any]:
         with self.lock:
             s = self.state
             return {"ts": s.get("ts"), "version": s["version"], "platform": s["platform"], "network": s.get("network"),
                     "home": s.get("home"), "stats": s.get("stats"), "threat": s.get("threat") or CHECKING, "lan": s.get("lan"),
-                    "sensor": s.get("sensor"), "cycle": s.get("cycle"),
+                    "sensor": self.sensor_status(), "cycle": s.get("cycle"), "monitoring": self.monitoring_status(),
                     "posture_score": (s.get("posture") or {}).get("score"), "health": s.get("health"),
                     "geo": self.geo.available, "feeds_entries": self.feeds.total_entries}
+
+    def monitoring_status(self) -> Dict[str, Any]:
+        with self.lock:
+            health = self.state["health"]
+            last = self.state.get("ts")
+            errors = dict(health.get("collectors", {}))
+            if health.get("fast", {}).get("last_error"):
+                errors["fast"] = health["fast"]["last_error"]
+            age = max(0, time.time() - last) if last is not None else None
+            limit = max(30, float(self.cfg.get("monitor.interval_sec", 15)) * 3)
+            if self._stop.is_set():
+                status, label = "stopped", "監視停止"
+            elif errors:
+                status, label = "error", "収集エラー"
+            elif last is None:
+                status, label = "starting", "初回収集中"
+            elif age > limit:
+                status, label = "stale", "更新停止"
+            elif not (self.state.get("network") or {}).get("interface"):
+                status, label = "offline", "ネットワーク未接続"
+            else:
+                status, label = "live", "実監視中"
+            return {"status": status, "label": label, "last_success": last,
+                    "age_sec": round(age, 1) if age is not None else None,
+                    "stale_after_sec": limit, "errors": errors}
 
     def snapshot(self, key: str) -> Any:
         with self.lock:
@@ -664,9 +707,17 @@ class Monitor:
                 return
 
     def start(self) -> None:
+        with self._lifecycle_lock:
+            if any(t.is_alive() for t in self._threads):
+                return
+            self._stop.clear()
+            self._start_threads()
+
+    def _start_threads(self) -> None:
+        self._threads = []
         c = self.cfg
         specs = [
-            ("fast", self.fast_cycle, lambda: float(c.get("monitor.interval_sec", 15)), 0.5),
+            ("fast", self.fast_cycle, lambda: float(c.get("monitor.interval_sec", 15)), 0.0),
             ("lan", self.lan_cycle, lambda: float(c.get("monitor.lan_discovery_interval_sec", 300)), 4.0),
             ("posture", self.posture_cycle, lambda: float(c.get("monitor.posture_interval_sec", 1800)), 8.0),
             ("exposure", self.exposure_cycle, lambda: float(c.get("monitor.exposure_interval_sec", 21600)), 25.0),
@@ -681,7 +732,12 @@ class Monitor:
             self._threads.append(t)
 
     def stop(self) -> None:
-        self._stop.set()
+        with self._lifecycle_lock:
+            self._stop.set()
+            deadline = time.monotonic() + 2
+            for thread in self._threads:
+                if thread is not threading.current_thread():
+                    thread.join(timeout=max(0, deadline - time.monotonic()))
 
     def check_stalls(self) -> Dict[str, str]:
         """Self-diagnosis: loops that have not succeeded for 3x their interval."""

@@ -1,6 +1,7 @@
 """AI analyst: explains an alert in plain Japanese and proposes concrete next steps.
 
 Providers (config ai.provider = auto | ollama | openai | anthropic | off):
+  * auto      — local providers only; cloud use requires explicit selection.
   * ollama    — local LLM on this Mac (default when running). Nothing leaves the machine.
   * openai    — any local OpenAI-compatible server (LM Studio, llama.cpp, MLX). Local only.
   * anthropic — Claude via the official `anthropic` SDK (optional: python3 -m pip install anthropic).
@@ -12,6 +13,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,9 +38,20 @@ def redact(text: str, public_ip: Optional[str]) -> str:
     return out
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
+        raise ValueError("ローカルAIのリダイレクトを拒否しました。接続先URLを確認してください")
+
+
 def _local(method: str, url: str, body: Optional[Dict[str, Any]] = None, timeout: float = 2.0) -> Any:
-    """HTTP to a model server on this machine, never through a proxy."""
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    """Enforce loopback on every request, with no proxy, DNS lookup or redirects."""
+    if not _is_local_url(url):
+        raise ValueError("ローカルAIの接続先は localhost・127.0.0.1・[::1] のみ指定できます")
+    parts = urllib.parse.urlsplit(url)
+    if parts.hostname == "localhost":
+        netloc = "127.0.0.1" + ((":" + str(parts.port)) if parts.port is not None else "")
+        url = urllib.parse.urlunsplit(parts._replace(netloc=netloc))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
     with opener.open(req, timeout=timeout) as r:
@@ -46,7 +59,22 @@ def _local(method: str, url: str, body: Optional[Dict[str, Any]] = None, timeout
 
 
 def _is_local_url(url: str) -> bool:
-    return bool(re.match(r"^https?://(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(/|$)", url or ""))
+    if not isinstance(url, str) or not url or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+        return False
+    try:
+        parts = urllib.parse.urlsplit(url)
+        return (parts.scheme in ("http", "https") and parts.hostname in ("127.0.0.1", "localhost", "::1")
+                and parts.username is None and parts.password is None and not parts.query and not parts.fragment
+                and (parts.port is None or 1 <= parts.port <= 65535))
+    except ValueError:
+        return False
+
+
+def _model_names(data: Any, collection: str, field: str) -> List[str]:
+    rows = data.get(collection) if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [m[field] for m in rows if isinstance(m, dict) and isinstance(m.get(field), str) and m[field].strip()]
 
 
 def ollama_models(cfg: Any) -> List[str]:
@@ -57,7 +85,7 @@ def ollama_models(cfg: Any) -> List[str]:
         data = _local("GET", base + "/api/tags", timeout=1.5)
     except (OSError, ValueError, urllib.error.URLError):
         return []
-    return [m.get("name") for m in data.get("models", []) if m.get("name")]
+    return _model_names(data, "models", "name")
 
 
 def openai_models(cfg: Any) -> List[str]:
@@ -68,7 +96,7 @@ def openai_models(cfg: Any) -> List[str]:
         data = _local("GET", base + "/models", timeout=1.5)
     except (OSError, ValueError, urllib.error.URLError):
         return []
-    return [m.get("id") for m in data.get("data", []) if m.get("id")]
+    return _model_names(data, "data", "id")
 
 
 def anthropic_ready() -> Tuple[bool, str]:
@@ -84,6 +112,8 @@ def anthropic_ready() -> Tuple[bool, str]:
 
 
 def status(cfg: Any) -> Dict[str, Any]:
+    if cfg.get("ai.provider", "auto") == "off":
+        return {"active": None, "providers": [], "hint": "AI解析は無効です（ai.provider: off）"}
     om = ollama_models(cfg)
     lm = openai_models(cfg)
     ok, why = anthropic_ready()
@@ -102,14 +132,19 @@ def status(cfg: Any) -> Dict[str, Any]:
     except RuntimeError:
         active = None
     return {"active": active, "providers": providers,
-            "hint": "ローカルLLM（Ollama/LM Studio）なら通信データがMacの外に出ません。Claudeを使う場合はMACアドレス等を伏せて送信します。"}
+            "hint": "autoはローカルLLMのみ使用します。Claudeへの送信は ai.provider を anthropic に設定した場合のみです。"
+                    "既定ではMACアドレスの末尾と判明している自宅の公開IPを伏せますが、完全な匿名化ではありません。"}
 
 
 def choose(cfg: Any, om: Optional[List[str]] = None, lm: Optional[List[str]] = None) -> Tuple[Optional[str], Optional[str]]:
     want = cfg.get("ai.provider", "auto")
     if want == "off":
         return None, None
+    if want not in ("auto", "ollama", "openai", "anthropic"):
+        raise RuntimeError("不明なAIプロバイダです。auto / ollama / openai / anthropic / off を指定してください")
     if want in ("auto", "ollama"):
+        if not _is_local_url(cfg.get("ai.ollama_url", "http://127.0.0.1:11434")):
+            raise RuntimeError("Ollama の接続先には localhost・127.0.0.1・[::1] を指定してください")
         models = om if om is not None else ollama_models(cfg)
         pick = cfg.get("ai.ollama_model") or (models[0] if models else None)
         if pick and (cfg.get("ai.ollama_model") or models):
@@ -117,13 +152,15 @@ def choose(cfg: Any, om: Optional[List[str]] = None, lm: Optional[List[str]] = N
         if want == "ollama":
             raise RuntimeError("Ollama が起動していないか、モデルがありません（ollama pull qwen3:8b 等）")
     if want in ("auto", "openai"):
+        if not _is_local_url(cfg.get("ai.openai_base_url", "http://127.0.0.1:1234/v1")):
+            raise RuntimeError("OpenAI互換AIの接続先には localhost・127.0.0.1・[::1] を指定してください")
         models = lm if lm is not None else openai_models(cfg)
         pick = cfg.get("ai.openai_model") or (models[0] if models else None)
         if pick and (cfg.get("ai.openai_model") or models):
             return "openai", pick
         if want == "openai":
             raise RuntimeError("OpenAI互換のローカルサーバー（LM Studio等）が見つかりません")
-    if want in ("auto", "anthropic"):
+    if want == "anthropic":
         ok, why = anthropic_ready()
         if ok:
             return "anthropic", cfg.get("ai.anthropic_model", "claude-opus-5-5")
@@ -152,6 +189,8 @@ def _strip_think(text: str) -> str:
 
 
 def analyze_alert(cfg: Any, alert: Dict[str, Any], monitor: Any = None) -> Dict[str, Any]:
+    if cfg.get("ai.provider", "auto") == "off":
+        return {"ok": False, "error": "AI解析は無効です（ai.provider: off）"}
     try:
         provider, model = choose(cfg)
     except RuntimeError as e:
@@ -160,7 +199,8 @@ def analyze_alert(cfg: Any, alert: Dict[str, Any], monitor: Any = None) -> Dict[
     if provider is None:
         return {"ok": False, "error": "使えるAIが見つかりません",
                 "hint": "おすすめ: Ollama をインストールして `ollama pull qwen3:8b` → KEKKAIを再読み込み。"
-                        "Claudeを使う場合は `python3 -m pip install anthropic` と ANTHROPIC_API_KEY を設定。"}
+                        "Claudeを使う場合は `python3 -m pip install anthropic` と ANTHROPIC_API_KEY に加え、"
+                        "config.json の ai.provider を anthropic に設定（クラウドへデータを送信します）。"}
     try:
         if provider == "ollama":
             base = cfg.get("ai.ollama_url", "http://127.0.0.1:11434").rstrip("/")
@@ -183,7 +223,7 @@ def analyze_alert(cfg: Any, alert: Dict[str, Any], monitor: Any = None) -> Dict[
             if cfg.get("ai.redact_for_cloud", True):
                 prompt = redact(prompt, pub)
             return _anthropic(cfg, model or "claude-opus-5-5", prompt)
-    except (OSError, ValueError, urllib.error.URLError) as e:
+    except (OSError, ValueError, TypeError, AttributeError, IndexError, urllib.error.URLError) as e:
         return {"ok": False, "error": "%s の呼び出しに失敗: %s" % (provider, e), "provider": provider, "model": model}
     if not text:
         return {"ok": False, "error": "AIの応答が空でした", "provider": provider, "model": model}

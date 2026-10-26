@@ -88,7 +88,7 @@ class RuleTest(unittest.TestCase):
 
     def test_threat_level(self):
         self.assertEqual(rules.threat_level({"critical": 1}), (5, "CRITICAL"))
-        self.assertEqual(rules.threat_level({}), (1, "SECURE"))
+        self.assertEqual(rules.threat_level({}), (1, "NO ALERTS"))
 
 
 class StoreTest(unittest.TestCase):
