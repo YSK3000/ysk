@@ -5,3 +5,4 @@ appengine-generated/
 __pycache__/
 *.pyc
 .kekkai-local/
+kekkai/dist/

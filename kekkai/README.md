@@ -46,7 +46,19 @@ Kali Linux の定番ツール（nmap / netdiscover / arpwatch / tcpdump / Snort 
 
 ---
 
-## はじめかた（Mac）
+## いちばん簡単な使い方（ダブルクリックのアプリ）
+
+ターミナルも git も使いません。
+
+```sh
+sh scripts/build_app.sh        # KEKKAI.app を dist/ に作る（Mac標準のPythonで動くので署名・追加DL不要）
+```
+
+できた `dist/KEKKAI.app` を「アプリケーション」へ移動し、初回だけ右クリック →『開く』。
+あとはダブルクリックするたびにダッシュボードが開き、ログイン中はバックグラウンドで監視が動きます。
+配布用に zip で渡したい場合は `dist/KEKKAI.app` をそのまま圧縮してください（中にプログラム一式を同梱済み）。
+
+## はじめかた（Mac・コマンドで使う場合）
 
 必要なもの: macOS（Apple Silicon / Intel）、Python 3.9以上（追加パッケージ不要）
 
