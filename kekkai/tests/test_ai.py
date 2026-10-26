@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import _support  # noqa: F401
-from kekkai import ai, config, server
+from kekkai import ai, config
 
 
 class AIPrivacyTest(unittest.TestCase):

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-import _support
+import _support  # noqa: F401  テスト用の環境変数を設定する副作用のため読み込む
 
 
 class ProbeExitTest(unittest.TestCase):

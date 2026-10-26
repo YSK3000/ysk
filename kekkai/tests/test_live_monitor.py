@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import _support
-from kekkai import cli, config, server
+from kekkai import cli, config
 from kekkai.live_runtime import single_monitor
 from kekkai.monitor import Monitor
 from kekkai.platforms.base import Connection, LanContext, Platform
