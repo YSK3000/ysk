@@ -178,6 +178,9 @@ def split_hostport(token: str) -> Tuple[str, int]:
         return token, 0
 
 
+_PROC_PID = re.compile(r"^(.*):(\d+)$")
+
+
 def _clean_addr(addr: str) -> str:
     if addr == "*":
         return "*"
@@ -214,10 +217,16 @@ def parse_netstat_sockets(text: str) -> List[Connection]:
         if pid_col is not None and pid_col < len(toks):
             v = toks[pid_col]
             if v.isdigit():
-                pid = int(v)
-            elif ":" in v and v.rsplit(":", 1)[1].isdigit():
-                pname, pid_s = v.rsplit(":", 1)
-                pid = int(pid_s)
+                pid = int(v)                       # macOS <= 15: plain "pid" column
+            else:
+                # macOS 26: "process:pid", and the (16-char) name may contain spaces
+                # ("Google Chrome He:414"), so join tokens up to the one ending in ":digits".
+                for j in range(pid_col, min(len(toks), pid_col + 8)):
+                    m = _PROC_PID.match(toks[j])
+                    if m:
+                        pname = " ".join(toks[pid_col:j] + [m.group(1)]).strip()
+                        pid = int(m.group(2))
+                        break
         out.append(Connection(proto=proto, laddr=_clean_addr(laddr), lport=lport,
                               raddr=_clean_addr(raddr), rport=rport, state=state,
                               pid=pid if pid else None, process=pname))
@@ -458,7 +467,9 @@ def parse_codesign(rc: int, stderr: str) -> Dict[str, Any]:
             info["adhoc"] = True
     info["signed"] = bool(info["authority"]) or info["adhoc"]
     auth = info["authority"]
-    info["apple"] = any(a in ("Software Signing", "Apple Mac OS Application Signing") for a in auth)
+    # "Software Signing" (<= macOS 15) became "macOS Software Signing" in macOS 26.
+    info["apple"] = bool(auth) and auth[-1] == "Apple Root CA" and (
+        auth[0].endswith("Software Signing") or auth[0] in ("Apple Mac OS Application Signing", "Apple iPhone OS Application Signing"))
     info["summary"] = ("Apple" if info["apple"] else
                        auth[0] if auth else "ad-hoc" if info["adhoc"] else "unsigned")
     return info
@@ -539,7 +550,7 @@ class MacOSPlatform(Platform):
         for c in conns:
             if c.pid and c.pid in procs:
                 p = procs[c.pid]
-                c.process = c.process or p.name
+                c.process = p.name or c.process   # ps has the full name; netstat truncates to 16 chars
                 c.path = p.path
                 c.uid = p.uid
         return conns

@@ -23,15 +23,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.10" }
           - { os: ubuntu-latest, python: "3.13" }
           - { os: macos-latest, python: "3.13" }
     defaults:
       run:
         working-directory: kekkai
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s tests -v
@@ -44,7 +44,7 @@ jobs:
       run:
         working-directory: kekkai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Apple-bundled Python (what a fresh Mac has)
         run: /usr/bin/python3 --version && /usr/bin/python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
       - name: unit tests on Apple python3

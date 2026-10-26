@@ -98,6 +98,20 @@ class MacOSParserTest(unittest.TestCase):
         self.assertEqual((quic.raddr, quic.rport, quic.pid, quic.state), ("142.250.196.110", 443, 414, ""))
         self.assertFalse(quic.is_listen)
 
+    def test_netstat_macos26_process_pid(self):
+        """Real `netstat -anvW` header from macOS 26.6 (GitHub runner); names can contain spaces."""
+        conns = mac.parse_netstat_sockets(fixture("macos", "netstat_tcp_macos26.txt"))
+        self.assertEqual(len(conns), 8)
+        got = [(c.proto, c.pid, c.process) for c in conns]
+        self.assertEqual(got[0], ("tcp", 968, "hosted-compute-a"))
+        self.assertEqual(got[2], ("tcp", 414, "Google Chrome He"))
+        self.assertEqual((conns[2].raddr, conns[2].rport, conns[2].state), ("17.57.146.20", 5223, "ESTABLISHED"))
+        self.assertEqual((conns[3].lport, conns[3].state, conns[3].pid, conns[3].is_listen), (22, "LISTEN", 1, True))
+        self.assertEqual((conns[4].pid, conns[4].process), (1135, ""))
+        self.assertEqual((conns[5].proto, conns[5].lport, conns[5].pid, conns[5].process), ("udp", 63691, 451, "replicatord"))
+        self.assertEqual((conns[6].laddr, conns[6].lport, conns[6].pid), ("*", 0, 403))
+        self.assertTrue(conns[7].is_listen)
+
     def test_netstat_process_column_variant(self):
         text = ("Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)      process:pid\n"
                 "tcp4       0      0  10.0.0.2.5000          1.1.1.1.443            ESTABLISHED  curl:4242\n")
@@ -138,6 +152,10 @@ class MacOSParserTest(unittest.TestCase):
         a = mac.parse_codesign(0, fixture("macos", "codesign_apple.txt"))
         self.assertTrue(a["signed"] and a["apple"])
         self.assertIsNone(a["team"])
+        a26 = mac.parse_codesign(0, fixture("macos", "codesign_apple_macos26.txt"))
+        self.assertTrue(a26["apple"], "macOS 26 renamed the authority to 'macOS Software Signing'")
+        fake = mac.parse_codesign(0, "Authority=macOS Software Signing\nAuthority=Evil CA\nTeamIdentifier=not set\n")
+        self.assertFalse(fake["apple"], "the chain must end at Apple Root CA")
         d = mac.parse_codesign(0, fixture("macos", "codesign_devid.txt"))
         self.assertEqual(d["team"], "EQHXZ8M8AV")
         self.assertFalse(d["apple"])

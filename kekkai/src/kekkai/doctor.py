@@ -78,8 +78,10 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
     if ctx is not None and ctx.gateway:
         out.append(_local_network_check(ctx.gateway))
     neigh, err, dt = _timed(p.neighbors)
-    out.append(_c("ARPテーブル", "fail" if err else ("ok" if neigh else "warn"),
-                  err or "%d 件 (%.2fs)" % (len(neigh), dt), "" if neigh else "LAN探索（kekkai scan）後に再確認してください"))
+    known = [n for n in (neigh or []) if n.mac]
+    out.append(_c("ARPテーブル", "fail" if err else ("ok" if known else "warn"),
+                  err or "%d 台（応答なし %d） (%.2fs)" % (len(known), len(neigh or []) - len(known), dt),
+                  "" if known else "LAN探索（kekkai scan）後に再確認してください"))
     conns, err, dt = _timed(p.connections)
     if err:
         out.append(_c("通信の取得", "fail", err))

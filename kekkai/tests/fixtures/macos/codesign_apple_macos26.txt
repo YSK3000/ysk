@@ -1,0 +1,12 @@
+Executable=/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari
+Identifier=com.apple.Safari
+Format=app bundle with Mach-O universal (x86_64 arm64e)
+CodeDirectory v=20400 size=425 flags=0x2000(library-validation) hashes=3+7 location=embedded
+Platform identifier=26
+Signature size=4567
+Authority=macOS Software Signing
+Authority=Apple Code Signing Certification Authority
+Authority=Apple Root CA
+Signed Time=Aug 13, 2026 at 2:07:34 AM
+Info.plist entries=48
+TeamIdentifier=not set
