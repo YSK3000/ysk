@@ -167,6 +167,9 @@ class App:
         if path == "/api/doctor":
             from kekkai import doctor
             return {"checks": doctor.run_checks(self.cfg, monitor=m, quick=True)}
+        if path == "/api/coverage":
+            from kekkai.coverage import describe
+            return describe(m)
         if path == "/api/report":
             from kekkai import report
             return {"markdown": report.markdown(m)}

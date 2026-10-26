@@ -44,7 +44,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "notify": {"macos": True, "min_severity": "high", "webhook_url": None, "ntfy_url": None},
     "ai": {
-        "provider": "auto",            # auto | ollama | openai | anthropic | off
+        "provider": "auto",            # auto is local only; cloud requires anthropic
         "ollama_url": "http://127.0.0.1:11434",
         "ollama_model": None,
         "openai_base_url": "http://127.0.0.1:1234/v1",

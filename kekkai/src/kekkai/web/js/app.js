@@ -3,12 +3,14 @@ import { h, s, add, clear, api, post, icon, emblem, flag, clock, datetime, ago, 
 import { WorldMap, nodesFromConnections } from "./worldmap.js";
 import { LanMap, deviceName, deviceStatus } from "./lanmap.js";
 
+import { monitorView } from "./health.js";
+
 const KIND_JA = {
   router: "ルーター", this: "このMac", computer: "PC", phone: "スマホ/タブレット", apple: "Apple機器", media: "AirPlay/メディア",
   tv: "テレビ/ストリーミング", speaker: "スマートスピーカー", printer: "プリンター", nas: "NAS/共有", camera: "カメラ",
   iot: "IoT/スマート家電", game: "ゲーム機", network: "ネットワーク機器", unknown: "不明",
 };
-const LEVELS = { 0: ["CHECKING", "確認中"], 1: ["SECURE", "安全"], 2: ["GUARDED", "注意"], 3: ["ELEVATED", "警戒"], 4: ["HIGH", "高"], 5: ["CRITICAL", "危険"] };
+const LEVELS = { 0: ["CHECKING", "確認中"], 1: ["NO ALERTS", "新規警告なし"], 2: ["GUARDED", "注意"], 3: ["ELEVATED", "警戒"], 4: ["HIGH", "高"], 5: ["CRITICAL", "危険"] };
 const STATUS_JA = { pass: "合格", warn: "要確認", fail: "要対策", info: "情報", unknown: "不明" };
 const CAT_JA = { system: "システム", network: "ネットワーク", sharing: "共有・公開", update: "アップデート", persistence: "自動起動" };
 
@@ -24,10 +26,10 @@ const VIEWS = [
 ];
 
 const S = {
-  summary: null, conns: [], listeners: [], devices: [], network: null, lan: null, alerts: [], threat: null,
+  summary: null, coverage: null, conns: [], listeners: [], devices: [], network: null, lan: null, alerts: [], threat: null,
   posture: null, wifi: null, persistence: [], exposure: null, upnp: null, intel: null, ai: null, doctor: null,
   history: [], view: null, selectedMac: null, alertFilter: "active", trafficFilter: "internet", trafficQuery: "",
-  geoHistory: false, geoRiskOnly: false, sse: false, lastConnFetch: 0, lastDevFetch: 0, aiBusy: {}, jobs: {},
+  reachable: false, geoHistory: false, geoRiskOnly: false, sse: false, lastConnFetch: 0, lastDevFetch: 0, aiBusy: {}, jobs: {},
 };
 
 const UI = {};
@@ -38,10 +40,11 @@ function shell() {
   const app = document.getElementById("app");
   clear(app);
   UI.live = h("span", { class: "live-dot" });
-  UI.liveText = h("span", { class: "live-text" }, "CONNECTING");
+  UI.liveText = h("span", { class: "live-text", role: "status", "aria-live": "polite" }, "接続確認中");
   UI.net = h("div", { class: "net-chip" });
   UI.threat = h("div", { class: "threat-meter", title: "脅威レベル" });
   UI.clock = h("div", { class: "clock" }, clock());
+  UI.ribbon = h("div", { class: "monitor-strip", role: "status", "aria-live": "off" }, "初回収集を開始しています");
   const top = h("header", { class: "topbar" },
     h("a", { class: "brand", href: "#command", "aria-label": "KEKKAI 概要へ" }, emblem(34),
       h("div", { class: "brand-text" }, h("div", { class: "brand-title" }, h("span", { class: "kanji" }, "結界"), " KEKKAI"),
@@ -59,13 +62,14 @@ function shell() {
   UI.locked = h("div", { class: "locked-overlay", hidden: true },
     h("div", { class: "panel locked-box" }, icon("lock", "big"), h("h2", null, "セッションが無効です"),
       h("p", null, "ターミナルに表示されたURLを開くか、", h("code", null, "./kekkai open"), " を実行してください。")));
-  add(app, top, h("div", { class: "body" }, UI.nav, UI.main), UI.toasts, UI.scrim, UI.drawer, UI.locked);
+  add(app, top, UI.ribbon, h("div", { class: "body" }, UI.nav, UI.main), UI.toasts, UI.scrim, UI.drawer, UI.locked);
   setInterval(() => { UI.clock.textContent = clock(); }, 1000);
 }
 
 function renderTop() {
   const sm = S.summary;
   if (!sm) return;
+  renderMonitor();
   const n = sm.network || {};
   clear(UI.net);
   add(UI.net, 
@@ -75,26 +79,43 @@ function renderTop() {
     n.learning ? h("span", { class: "chip chip-amber" }, "学習中") : null,
     n.id && !n.trusted ? h("span", { class: "chip chip-amber" }, "外出先") : null,
     sm.sensor && sm.sensor.active ? h("span", { class: "chip chip-mint" }, "SENSOR") : null);
-  const t = sm.threat || { level: 0, label: "CHECKING", counts: {} };
-  S.threat = t;
-  clear(UI.threat);
-  UI.threat.className = `threat-meter lvl-${t.level}`;
-  add(UI.threat, h("span", { class: "tm-label" }, "THREAT"),
-    h("span", { class: "tm-bars" }, [1, 2, 3, 4, 5].map((i) => h("i", { class: i <= t.level ? "on" : "" }))),
-    h("span", { class: "tm-name" }, LEVELS[t.level][0]), h("span", { class: "tm-ja" }, LEVELS[t.level][1]));
-  const open = Object.values(t.counts || {}).reduce((a, b) => a + b, 0);
-  UI.navBadge.hidden = !open;
-  UI.navBadge.textContent = open > 99 ? "99+" : String(open);
+
 }
 
 function setLive(on, text) {
   S.sse = on;
-  UI.live.classList.toggle("on", on);
-  UI.liveText.textContent = text || (on ? "LIVE" : "OFFLINE");
+  renderMonitor();
+}
+
+function renderMonitor() {
+  const m = monitorView(S.summary, S.reachable);
+  UI.live.classList.toggle("on", m.live);
+  if (UI.liveText.textContent !== m.label) UI.liveText.textContent = m.label;
+  UI.ribbon.textContent = `${m.label} ｜ ${m.detail}`;
+  UI.ribbon.classList.toggle("warn", !m.live);
+  const sm = S.summary || {};
+  const t = sm.threat || { level: 0, label: "CHECKING", counts: {} };
+  S.threat = t;
+  clear(UI.threat);
+  UI.threat.className = `threat-meter lvl-${m.live ? t.level : 0}`;
+  add(UI.threat, h("span", { class: "tm-label" }, "THREAT"),
+    h("span", { class: "tm-bars" }, [1, 2, 3, 4, 5].map((i) => h("i", { class: m.live && i <= t.level ? "on" : "" }))),
+    h("span", { class: "tm-name" }, monitorView(sm, S.reachable).live ? LEVELS[t.level][0] : "UNKNOWN"),
+    h("span", { class: "tm-ja" }, monitorView(sm, S.reachable).live ? LEVELS[t.level][1] : "判定保留"));
+  const open = Object.values(t.counts || {}).reduce((a, b) => a + b, 0);
+  UI.navBadge.hidden = !open;
+  UI.navBadge.textContent = open > 99 ? "99+" : String(open);
+  if (current === Views.command && current.gaugeBox) {
+    clear(current.gaugeBox).appendChild(m.live ? gauge(t.level, t.counts) : empty("判定保留", m.label));
+  }
+  if (UI.connectionCoverage) UI.connectionCoverage.textContent = m.label;
 }
 
 // ------------------------------------------------------------------ data
-async function loadSummary() { S.summary = await api("/api/summary"); renderTop(); }
+async function loadSummary() {
+  try { S.summary = await api("/api/summary", 5000); S.reachable = true; renderTop(); }
+  catch (e) { S.reachable = false; renderMonitor(); throw e; }
+}
 async function loadConns() {
   const r = await api("/api/connections");
   S.conns = r.connections || []; S.listeners = r.listeners || []; S.lastConnFetch = Date.now();
@@ -114,7 +135,9 @@ async function loadExposure() { const r = await api("/api/exposure"); S.exposure
 async function loadIntel() { S.intel = await api("/api/intel"); S.ai = await api("/api/ai/status").catch(() => null); }
 async function loadHistory() { S.history = (await api("/api/destinations?hours=24")).destinations || []; }
 
-const LOADERS = { conns: loadConns, devices: loadDevices, alerts: loadAlerts, posture: loadPosture, exposure: loadExposure,
+async function loadCoverage() { S.coverage = await api("/api/coverage"); }
+
+const LOADERS = { coverage: loadCoverage, conns: loadConns, devices: loadDevices, alerts: loadAlerts, posture: loadPosture, exposure: loadExposure,
                   intel: loadIntel, history: loadHistory };
 
 async function refresh(keys) {
@@ -234,8 +257,11 @@ function internetConns() { return S.conns.filter((c) => c.scope === "internet");
 const Views = {};
 
 Views.command = {
-  needs: ["conns", "alerts", "devices"],
+  needs: ["conns", "alerts", "devices", "coverage"],
   mount(el) {
+    const cp = panel("DEFENSE COVERAGE", "防御機能の稼働状況", { cls: "coverage-panel" });
+    this.coverage = cp.body;
+    el.appendChild(cp.el);
     const grid = h("div", { class: "grid-command" });
     const mp = panel("LIVE CONNECTIONS", "通信先マップ", { cls: "map-panel" });
     this.mapCaption = h("span", { class: "muted small" });
@@ -263,11 +289,18 @@ Views.command = {
   },
   update() {
     const sm = S.summary || {};
+    clear(this.coverage);
+    if (S.coverage) {
+      add(this.coverage, h("div", { class: "coverage-grid" }, S.coverage.cards.map((card) =>
+        h("div", { class: "coverage-card" }, h("b", null, card.label), card.id === "connections" ? (UI.connectionCoverage = h("p", null, monitorView(sm, S.reachable).label)) : h("p", null, card.detail),
+          card.url ? h("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" }, "公式サイト") : h("span", { class: "muted small" }, card.action)))),
+        h("p", { class: "muted small" }, S.coverage.limits.join(" ")));
+    }
     this.map.setHome(sm.home);
     const nodes = nodesFromConnections(S.conns);
     this.map.update(nodes);
     this.mapCaption.textContent = `${nodes.length} 拠点 · ${internetConns().length} 接続`;
-    clear(this.gaugeBox).appendChild(gauge((S.threat || sm.threat || {}).level ?? 0, (S.threat || sm.threat || {}).counts));
+    clear(this.gaugeBox).appendChild(monitorView(sm, S.reachable).live ? gauge((S.threat || sm.threat || {}).level ?? 0, (S.threat || sm.threat || {}).counts) : empty("判定保留", monitorView(sm, S.reachable).label));
     const st = sm.stats || {};
     const online = S.devices.filter((d) => d.online).length;
     const fresh = S.devices.filter((d) => d.new && !d.trusted && d.kind !== "this").length;
@@ -288,7 +321,7 @@ Views.command = {
     const ic = internetConns();
     const byCountry = aggregate(ic, (c) => (c.geo || {}).country, (c) => `${flag((c.geo || {}).country)} ${(c.geo || {}).country_ja || (c.geo || {}).country}`);
     const byOrg = aggregate(ic, (c) => (c.geo || {}).org, (c) => trunc((c.geo || {}).org, 26));
-    add(this.dest, h("div", { class: "two-col" }, h("div", null, h("h4", null, "国・地域"), byCountry.length ? bars(byCountry, 6) : empty("通信なし")),
+    add(this.dest, h("div", { class: "two-col" }, h("div", null, h("h4", null, "国・地域"), byCountry.length ? bars(byCountry, 6) : empty(ic.length ? "位置情報DB未取得・位置不明" : "該当する通信なし")),
       h("div", null, h("h4", null, "組織 (AS)"), byOrg.length ? bars(byOrg, 6) : empty("—"))));
     this.lan.update(S.devices, S.network);
     clear(this.lanLegend);
@@ -532,19 +565,19 @@ Views.traffic = {
     const q = S.trafficQuery.trim().toLowerCase();
     if (q) rows = rows.filter((c) => [c.process, c.raddr, (c.geo || {}).org, (c.geo || {}).city, (c.geo || {}).country_ja].join(" ").toLowerCase().includes(q));
     clear(this.body);
-    if (!rows.length) this.body.appendChild(empty("該当する接続はありません"));
+    if (!rows.length) this.body.appendChild(empty(monitorView(S.summary, S.reachable).live ? "該当する接続はありません" : "通信情報を取得できていません", monitorView(S.summary, S.reachable).detail));
     else this.body.appendChild(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl conn-tbl" },
       h("thead", null, h("tr", null, ["", "プロセス", "方向", "宛先", "ポート", "所在地", "組織", "状態", "検知"].map((t) => h("th", null, t)))),
       h("tbody", null, rows.slice(0, 400).map((c) => {
         const g = c.geo || {};
         return h("tr", { class: `risk-${c.risk}`, tabindex: 0, onclick: () => c.scope === "internet" && openNode(connNode(c)) },
           h("td", null, h("i", { class: `dot risk-${c.risk}` })),
-          h("td", { class: "proc", title: c.path || "" }, c.process || "?", c.pid ? h("span", { class: "muted small" }, ` ${c.pid}`) : null),
+          h("td", { class: "proc", title: c.path || "" }, c.process || "プロセス未特定", c.pid ? h("span", { class: "muted small" }, ` ${c.pid}`) : null),
           h("td", null, c.direction === "in" ? h("span", { class: "chip chip-amber" }, "受信") : h("span", { class: "chip" }, "送信")),
           h("td", { class: "mono" }, c.raddr), h("td", { class: "mono" }, `${c.rport}/${c.proto}`),
           h("td", null, c.scope === "internet" ? `${flag(g.country)} ${[g.city, g.country_ja].filter(Boolean).join(", ")}` : c.scope === "lan" ? "LAN" : c.scope),
           h("td", { class: "small" }, trunc(g.org || "", 28)), h("td", { class: "small mono" }, c.state || "—"),
-          h("td", null, (c.flags || []).map((f) => h("span", { class: "chip chip-red" }, f))));
+          h("td", null, c.signature?.pending ? h("span", { class: "chip" }, "署名確認中") : null, (c.flags || []).map((f) => h("span", { class: "chip chip-red" }, f))));
       })))));
     clear(this.lbody);
     const ls = S.listeners.filter((l) => l.proto === "tcp" || l.exposed);
@@ -833,6 +866,7 @@ function connectSSE() {
   es.addEventListener("error", () => setLive(false, "RECONNECTING"));
   const onSummary = (e) => {
     try { S.summary = Object.assign({}, S.summary || {}, JSON.parse(e.data)); } catch (_) { return; }
+    S.reachable = true;
     renderTop();
     liveRefresh();
   };
@@ -854,7 +888,7 @@ function connectSSE() {
 
 const liveRefresh = debounce(async () => {
   if (!current) return;
-  const needs = current.needs.filter((k) => k === "conns" || (k === "devices" && Date.now() - S.lastDevFetch > 30000) || (k === "alerts"));
+  const needs = current.needs.filter((k) => k === "conns" || k === "coverage" || (k === "devices" && Date.now() - S.lastDevFetch > 30000) || (k === "alerts"));
   if (!needs.length) return;
   await refresh(needs);
   if (current && !UI.drawer.classList.contains("open")) current.update();
@@ -876,7 +910,14 @@ async function main() {
   try { await loadSummary(); } catch (e) { setLive(false); }
   await go();
   connectSSE();
-  setInterval(() => { if (!S.sse) { loadSummary().then(liveRefresh).catch(() => {}); } }, 10000);
+  let polling = false;
+  setInterval(async () => {
+    if (polling) return;
+    polling = true;
+    try { await loadSummary(); liveRefresh(); } catch (_) {}
+    finally { polling = false; }
+  }, 5000);
+  setInterval(renderMonitor, 1000);
 }
 
 main();

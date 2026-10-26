@@ -91,7 +91,10 @@ KEKKAI を更新（`git pull`）したら `sudo ./kekkai install-sensor` をも�
 |---|---|---|
 | nmap | `brew install nmap` | 「詳細スキャン」でサービスのバージョンまで特定 |
 | Ollama + モデル | `brew install ollama` → `ollama serve` → `ollama pull qwen3:8b` など | AI解説をMac内で完結（MacBook Proなら快適） |
-| Claude（クラウド） | `python3 -m pip install anthropic` ＋ `ANTHROPIC_API_KEY` | ローカルLLMが無いときのAI解説（MACアドレス等は伏せて送信） |
+| Claude（クラウド） | `python3 -m pip install anthropic` ＋ `ANTHROPIC_API_KEY` ＋ 設定 `ai.provider: "anthropic"` | 明示的に選択した場合のみ送信。既定ではMAC末尾・判明している自宅の公開IPを伏せますが、完全な匿名化ではありません |
+
+既定のAI設定 `auto` はローカルLLMのみ使います。ローカルAIが停止していても、クラウドには自動で切り替えません。
+ローカルAIの接続先は `localhost`・`127.0.0.1`・`[::1]` に限り、プロキシとリダイレクトを使いません。
 
 > **macOS 15 以降の注意**: ターミナルから起動した場合は問題ありませんが、自動起動（install-agent）では
 > 「ローカルネットワーク」の許可でLAN探索が止まることがあります。`./kekkai doctor` が検出するので、
@@ -182,10 +185,16 @@ MCPツール: `kekkai_status` `kekkai_alerts` `kekkai_connections` `kekkai_devic
 
 ## 不具合を自分たちで見つけて直す仕組み
 
+- 画面上部に実際の収集状態と最終成功からの時間を表示します。初回収集・収集エラー・更新停止・ネットワーク未接続を区別し、画面への接続だけで「実監視中」にはしません
+- 収集失敗時は前回の記録を保持し、空の結果で学習内容を上書きしません。新規の未対応アラートがないときは「新規警告なし」と表示し、「安全」と断定しません
+- 概要の「防御機能の稼働状況」で、通信収集・脅威リスト・パケットセンサー・Nmap・通信遮断の対応状況を確認できます。API は `/api/coverage`、MCP は `kekkai_coverage`
+- 自宅の座標が不明なときは地図に自宅を描きません。位置情報がなくてもIP・プロセスの収集は継続します
+- `./kekkai serve` の二重起動を防ぎ、署名検査は通信収集を待たせずバックグラウンドで実行します
 - `./kekkai doctor` — 収集処理・パーサー・データ鮮度・権限・AI接続を自己診断（ダッシュボードの「脅威情報」画面からも実行可）
 - ダッシュボードの「自己診断」表 — 監視ループごとの実行回数・エラー・所要時間を常時表示
 - 単体テスト 60件以上（Python標準の unittest。Macでもそのまま実行可）:
   `cd kekkai && python3 -m unittest discover -s tests`
+- 外部通信・LANスキャンなしの実通信検証: `python3 scripts/verify_live_local.py`。一時的なループバックTCP接続をOSから読み取り、PID・継続収集・認証付きAPIまで検証します。通常の設定・監視データは変更しません
 - GitHub Actions で **本物のmacOS** 上の動作を毎回検証（`.github/workflows/kekkai.yml`）。
   macOSの実コマンド出力とパーサーの結果を突き合わせ、実データのダウンロード・サーバー・MCP・センサーまで確認します
 - パケットセンサーは、攻撃を再現したパケットを本物の tcpdump に通して検知を確認し、実機のMacでも

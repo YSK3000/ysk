@@ -38,6 +38,8 @@ jobs:
         env:
           KEKKAI_REQUIRE_TCPDUMP: ${{ runner.os == 'macOS' && '1' || '' }}
         run: python -m unittest discover -s tests -v
+      - name: dashboard monitoring state tests
+        run: node tests/test_health_ui.mjs
 
   macos-smoke:
     name: macOS real-machine smoke (Apple python3)
@@ -55,9 +57,32 @@ jobs:
           KEKKAI_REQUIRE_TCPDUMP: "1"
           KEKKAI_SHOW_TCPDUMP: "1"
         run: /usr/bin/python3 -m unittest discover -s tests
+      - name: real socket to authenticated API (no external calls)
+        run: /usr/bin/python3 scripts/verify_live_local.py
       - name: real collectors, downloads, server, MCP
         run: /usr/bin/python3 scripts/ci_smoke.py
       - name: everyday setup (auto-start agent, always-on sensor daemon, live detection, uninstall)
         run: scripts/ci_service.sh
       - name: measure real behaviour before building on it (Tor .onion, ransomware.live API, BTM)
         run: scripts/ci_probe.sh
+
+  macos-intel:
+    name: macOS Intel real monitoring and services
+    # Standard x86_64 runner: https://github.com/actions/runner-images/issues/13045
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: kekkai
+    steps:
+      - uses: actions/checkout@v5
+      - name: verify Intel and Apple Python
+        run: /usr/bin/python3 -c "import platform; print(platform.machine(), platform.python_version()); assert platform.machine() == 'x86_64'"
+      - name: unit tests on Intel
+        env:
+          KEKKAI_REQUIRE_TCPDUMP: "1"
+        run: /usr/bin/python3 -m unittest discover -s tests
+      - name: real socket to authenticated API on Intel
+        run: /usr/bin/python3 scripts/verify_live_local.py
+      - name: auto-start, sensor detection, and cleanup on Intel
+        run: scripts/ci_service.sh

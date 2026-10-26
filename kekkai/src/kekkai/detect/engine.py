@@ -489,7 +489,7 @@ def threat_level(counts: Dict[str, int]) -> Tuple[int, str]:
         return 3, "ELEVATED"
     if counts.get("low"):
         return 2, "GUARDED"
-    return 1, "SECURE"
+    return 1, "NO ALERTS"
 
 
 def dedupe(findings: Iterable[Finding]) -> List[Finding]:
