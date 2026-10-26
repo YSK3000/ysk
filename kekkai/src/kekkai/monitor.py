@@ -61,6 +61,10 @@ class EventBus:
                     pass
 
 
+# Shown until the first check has finished: never claim "SECURE" before anything was looked at.
+CHECKING: Dict[str, Any] = {"level": 0, "label": "CHECKING", "counts": {}}
+
+
 class Monitor:
     def __init__(self, cfg: Any, store: Optional[Store] = None, platform: Any = None):
         self.cfg = cfg
@@ -556,7 +560,7 @@ class Monitor:
         with self.lock:
             s = self.state
             return {"ts": s.get("ts"), "version": s["version"], "platform": s["platform"], "network": s.get("network"),
-                    "home": s.get("home"), "stats": s.get("stats"), "threat": s.get("threat"), "lan": s.get("lan"),
+                    "home": s.get("home"), "stats": s.get("stats"), "threat": s.get("threat") or CHECKING, "lan": s.get("lan"),
                     "sensor": s.get("sensor"), "cycle": s.get("cycle"),
                     "posture_score": (s.get("posture") or {}).get("score"), "health": s.get("health"),
                     "geo": self.geo.available, "feeds_entries": self.feeds.total_entries}

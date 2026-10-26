@@ -101,7 +101,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 650; }
 .threat-meter .tm-bars i.on { background: var(--lvl); box-shadow: 0 0 8px var(--lvl); }
 .tm-name { font-weight: 700; font-size: 12px; letter-spacing: .14em; color: var(--lvl); }
 .tm-ja { font: 12px var(--sans); color: var(--text-2); }
-.lvl-1 { --lvl: var(--mint); } .lvl-2 { --lvl: var(--sev-low); } .lvl-3 { --lvl: var(--amber); } .lvl-4 { --lvl: var(--orange); } .lvl-5 { --lvl: var(--red); }
+.lvl-0 { --lvl: var(--muted); } .lvl-1 { --lvl: var(--mint); } .lvl-2 { --lvl: var(--sev-low); } .lvl-3 { --lvl: var(--amber); } .lvl-4 { --lvl: var(--orange); } .lvl-5 { --lvl: var(--red); }
 .threat-meter.lvl-5 { animation: alarm 1.6s ease-in-out infinite; border-color: rgba(255, 56, 96, .6); }
 .clock { font: 600 15px var(--mono); letter-spacing: .1em; color: var(--text-2); min-width: 78px; text-align: right; }
 
@@ -200,7 +200,7 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 .g-num { font: 700 42px var(--mono); fill: var(--text); }
 .g-name { font: 700 13px var(--mono); letter-spacing: .24em; }
 .g-ja { font: 11px var(--sans); fill: var(--muted); }
-.gauge.lvl-1 .g-name { fill: var(--mint); } .gauge.lvl-2 .g-name { fill: var(--sev-low); } .gauge.lvl-3 .g-name { fill: var(--amber); }
+.gauge.lvl-0 .g-name { fill: var(--muted); } .gauge.lvl-1 .g-name { fill: var(--mint); } .gauge.lvl-2 .g-name { fill: var(--sev-low); } .gauge.lvl-3 .g-name { fill: var(--amber); }
 .gauge.lvl-4 .g-name { fill: var(--orange); } .gauge.lvl-5 .g-name { fill: var(--red); }
 .gauge.lvl-5 .g-num { fill: var(--red); animation: blink 1.2s steps(2) infinite; }
 .g-counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; margin-top: 2px; }

@@ -130,6 +130,16 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(self.st.kv_get("x"), {"a": [1, 2]})
 
 
+class NoUnfoundedSecureTest(unittest.TestCase):
+    def test_checking_until_first_cycle(self):  # "SECURE" must not be shown before anything was checked
+        import _fakenet
+        from kekkai import config
+        from kekkai.monitor import Monitor
+        m = Monitor(config.load(), store=_fakenet.Store(":memory:"), platform=_fakenet.FakePlatform())
+        self.assertEqual(m.summary()["threat"]["label"], "CHECKING")
+        m.store.close()
+
+
 class IntrusionScenarioTest(unittest.TestCase):
     """End-to-end: a scripted intrusion on a fake LAN must be detected, without false positives."""
 

@@ -8,7 +8,7 @@ const KIND_JA = {
   tv: "テレビ/ストリーミング", speaker: "スマートスピーカー", printer: "プリンター", nas: "NAS/共有", camera: "カメラ",
   iot: "IoT/スマート家電", game: "ゲーム機", network: "ネットワーク機器", unknown: "不明",
 };
-const LEVELS = { 1: ["SECURE", "安全"], 2: ["GUARDED", "注意"], 3: ["ELEVATED", "警戒"], 4: ["HIGH", "高"], 5: ["CRITICAL", "危険"] };
+const LEVELS = { 0: ["CHECKING", "確認中"], 1: ["SECURE", "安全"], 2: ["GUARDED", "注意"], 3: ["ELEVATED", "警戒"], 4: ["HIGH", "高"], 5: ["CRITICAL", "危険"] };
 const STATUS_JA = { pass: "合格", warn: "要確認", fail: "要対策", info: "情報", unknown: "不明" };
 const CAT_JA = { system: "システム", network: "ネットワーク", sharing: "共有・公開", update: "アップデート", persistence: "自動起動" };
 
@@ -75,7 +75,7 @@ function renderTop() {
     n.learning ? h("span", { class: "chip chip-amber" }, "学習中") : null,
     n.id && !n.trusted ? h("span", { class: "chip chip-amber" }, "外出先") : null,
     sm.sensor && sm.sensor.active ? h("span", { class: "chip chip-mint" }, "SENSOR") : null);
-  const t = sm.threat || { level: 1, label: "SECURE", counts: {} };
+  const t = sm.threat || { level: 0, label: "CHECKING", counts: {} };
   S.threat = t;
   clear(UI.threat);
   UI.threat.className = `threat-meter lvl-${t.level}`;
@@ -267,7 +267,7 @@ Views.command = {
     const nodes = nodesFromConnections(S.conns);
     this.map.update(nodes);
     this.mapCaption.textContent = `${nodes.length} 拠点 · ${internetConns().length} 接続`;
-    clear(this.gaugeBox).appendChild(gauge((S.threat || sm.threat || {}).level || 1, (S.threat || sm.threat || {}).counts));
+    clear(this.gaugeBox).appendChild(gauge((S.threat || sm.threat || {}).level ?? 0, (S.threat || sm.threat || {}).counts));
     const st = sm.stats || {};
     const online = S.devices.filter((d) => d.online).length;
     const fresh = S.devices.filter((d) => d.new && !d.trusted && d.kind !== "this").length;
