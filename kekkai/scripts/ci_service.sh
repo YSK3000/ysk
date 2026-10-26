@@ -57,6 +57,17 @@ PY
 for _ in $(seq 40); do grep -q dns_threat "$STATE/events.jsonl" 2>/dev/null && break; sleep 0.5; done
 grep -q '"kind": "dns_threat"' "$STATE/events.jsonl" || fail "daemon did not detect the live DNS lookup"
 echo "PASS live detection by the daemon: $(grep -c dns_threat "$STATE/events.jsonl") events"
+$PY -c "
+import socket
+s = socket.socket(); s.settimeout(3)
+try:
+    s.connect(('1.1.1.1', 443))
+except OSError:
+    pass
+s.close()"
+for _ in $(seq 20); do grep -q '"dst": "1.1.1.1"' "$STATE/events.jsonl" 2>/dev/null && break; sleep 0.5; done
+grep -q '"kind": "conn_out", "dst": "1.1.1.1"' "$STATE/events.jsonl" || fail "daemon did not record a short outbound connection"
+echo "PASS short outbound connection recorded: $(grep '"dst": "1.1.1.1"' "$STATE/events.jsonl" | head -1)"
 ./kekkai doctor --quick | grep "パケットセンサー" | tee /dev/stderr | grep -q "監視中" || fail "doctor does not see the running sensor"
 sudo ./kekkai uninstall-sensor || fail "uninstall-sensor"
 sleep 1

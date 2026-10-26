@@ -86,8 +86,10 @@ def attack_frames(t0: float = 1761400000.0) -> List[Tuple[float, bytes]]:
         fr.append((t, b))
     add(arp(2, GW_MAC, GW_IP, OWN_MAC, OWN_IP, OWN_MAC))                        # the real router
     add(dns_query(OWN_IP, 53001, GW_IP, "www.apple.com", OWN_MAC, GW_MAC, 4001))
-    for i, p in enumerate(SCAN_PORTS):                                         # outbound SYNs: not a scan of us
+    for i, p in enumerate(SCAN_PORTS):                                         # outbound SYNs: recorded, not a scan
         add(tcp(OWN_IP, 50000 + i, "93.184.215.%d" % (i + 1), p, 0x02, OWN_MAC, GW_MAC))
+    add(tcp(OWN_IP, 50100, "93.184.215.1", 21, 0x02, OWN_MAC, GW_MAC))          # retry of the same: recorded once
+    add(tcp(OWN_IP, 50101, "192.168.10.44", 445, 0x02, OWN_MAC, "02:00:00:00:00:44"))  # LAN peer: not recorded
     for i, p in enumerate(SCAN_PORTS):                                         # someone else being scanned
         add(tcp(ATK_IP, 40000 + i, "192.168.10.77", p, 0x02, ATK_MAC, "02:00:00:00:00:77"))
     for i, p in enumerate(SCAN_PORTS):                                         # SYN-ACKs to us: replies, not probes

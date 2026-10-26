@@ -331,6 +331,20 @@ def sensor_finding(ev: Dict[str, Any]) -> Optional[Finding]:
     return None
 
 
+def sensor_conn_finding(ev: Dict[str, Any], threats: List[Dict[str, Any]], geo: Dict[str, Any]) -> Optional[Finding]:
+    """An outbound connection seen by the packet sensor (incl. ones too short for the 15 s poll) to a listed IP."""
+    if not threats:
+        return None
+    t = threats[0]  # FeedSet.match returns the most severe listing first
+    where = " / ".join(x for x in (geo.get("country_ja") or geo.get("country"), geo.get("org")) if x) or "場所不明"
+    return Finding("sensor.threat_conn", t["severity"], "脅威リスト掲載IPへの接続（パケットで検知）: %s" % ev.get("dst"),
+                   "このMacが %s:%s（%s）へ接続を開始しました。掲載リスト: %s。通信一覧に出ないほど短い接続だったため、"
+                   "どのアプリかは特定できていません。" % (ev.get("dst"), ev.get("dport"), where, t["label"]),
+                   "同じ接続が繰り返すか「通信」画面とアラートを確認してください。心当たりがなければ、最近入れたアプリや"
+                   "自動起動項目を確認し、LuLu等で接続先をブロックしてください。誤検知（共有IP/CDN）もあり得ます。",
+                   subject=str(ev.get("dst")), data=ev)
+
+
 def threat_level(counts: Dict[str, int]) -> Tuple[int, str]:
     if counts.get("critical"):
         return 5, "CRITICAL"

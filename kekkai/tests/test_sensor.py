@@ -24,6 +24,7 @@ EXPECTED = collections.Counter({("port_scan", _pcap.ATK_IP): 1, ("port_scan", _p
                                 ("arp_sweep", _pcap.ATK_IP): 1, ("arp_spoof", _pcap.ATK_MAC): 1,
                                 ("dns_threat", "login." + _pcap.BAD_DOMAIN): 1, ("dns_threat", "cdn." + _pcap.BAD_DOMAIN): 1,
                                 ("dns_threat", "api." + _pcap.BAD_DOMAIN): 1, ("dns_threat", "v6." + _pcap.BAD_DOMAIN): 1})
+EXPECTED.update({("conn_out", "93.184.215.%d" % (i + 1)): 1 for i in range(len(_pcap.SCAN_PORTS))})
 
 
 def detector() -> sensor.Detector:
@@ -31,7 +32,7 @@ def detector() -> sensor.Detector:
 
 
 def summarize(events):
-    key = {"port_scan": "src", "arp_sweep": "src", "arp_spoof": "mac", "dns_threat": "domain"}
+    key = {"port_scan": "src", "arp_sweep": "src", "arp_spoof": "mac", "dns_threat": "domain", "conn_out": "dst"}
     return collections.Counter((e["kind"], e[key[e["kind"]]]) for e in events)
 
 
@@ -130,6 +131,39 @@ class NetworkChangeTest(unittest.TestCase):
         plat.neighbors.return_value = []
         c = sensor.sensor_context(plat, "en7")
         self.assertEqual((c["iface"], c["ip"], c["gw"], c["gw_dup"]), ("en7", "10.0.5.2", None, False))
+
+
+class ShortConnectionTest(unittest.TestCase):
+    """Connections too short for the 15 s poll are still checked against the threat lists."""
+
+    def setUp(self):
+        import _fakenet
+        from kekkai import config
+        from kekkai.monitor import Monitor
+        self.m = Monitor(config.load(), store=_fakenet.Store(":memory:"), platform=_fakenet.FakePlatform())
+        self.m.feeds = _fakenet.FakeFeeds(tempfile.mkdtemp())
+        self.m.geo = _fakenet.FakeGeo()
+        _fakenet.netutil.EXTRA_PUBLIC_NETS = (_fakenet.netutil.ipaddress.ip_network("203.0.113.0/24"),)
+        self.addCleanup(setattr, _fakenet.netutil, "EXTRA_PUBLIC_NETS", ())
+        self.addCleanup(self.m.store.close)
+        self.spool = sensor.state_dir() / "events.jsonl"
+        self.addCleanup(lambda: self.spool.exists() and self.spool.unlink())
+
+    def ingest(self, *events):
+        with open(str(self.spool), "a") as f:
+            for ev in events:
+                f.write(json.dumps(ev) + "\n")
+        self.m.sensor_cycle()
+        return [a for a in self.m.store.alerts(None, limit=50) if a["rule"] == "sensor.threat_conn"]
+
+    def test_short_connection_to_listed_ip_alerts(self):
+        alerts = self.ingest({"kind": "conn_out", "dst": "203.0.113.66", "dport": 4444, "ts": 1.0},
+                             {"kind": "conn_out", "dst": "17.253.144.10", "dport": 443, "ts": 1.0})
+        self.assertEqual([(a["subject"], a["severity"]) for a in alerts], [("203.0.113.66", "critical")])
+
+    def test_connection_seen_by_poll_is_left_to_the_poll(self):  # the poll alert names the app; no duplicate
+        self.m.state["connections"] = [{"raddr": "203.0.113.66", "rport": 4444}]
+        self.assertEqual(self.ingest({"kind": "conn_out", "dst": "203.0.113.66", "dport": 4444, "ts": 1.0}), [])
 
 
 class StateDirTest(unittest.TestCase):

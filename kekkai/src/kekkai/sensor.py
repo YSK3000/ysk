@@ -22,10 +22,11 @@ import time
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
-from kekkai.netutil import neighbor_overlap, normalize_mac
+from kekkai.netutil import is_public, neighbor_overlap, normalize_mac
 from kekkai.util import FetchError, atomic_write, find_cmd, http_get, log
 
 DOMAIN_FEED_URL = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.mini-onlydomains.txt"
+SPOOL_LIMIT = 20 * 1024 * 1024  # events.jsonl is rotated to events.jsonl.1 beyond this
 HEARTBEAT_EVERY = 5.0   # seconds; the dashboard treats a heartbeat older than 30 s as "sensor stopped"
 CONTEXT_EVERY = 30.0    # how often the sensor checks whether the Mac moved to another network
 
@@ -58,12 +59,21 @@ class Detector:
         k = (kind, key)
         if ts - self._cool.get(k, -1e18) < seconds:
             return False
+        if len(self._cool) > 50000:  # outbound connections add many keys: keep memory bounded
+            self._cool = {kk: v for kk, v in self._cool.items() if ts - v < 3600}
         self._cool[k] = ts
         return True
 
     def feed(self, line: str) -> Optional[Dict[str, Any]]:
         m = TCP_SYN.match(line)
         if m:
+            if self.own_ip and m.group("src") == self.own_ip:
+                # every connection this Mac opens, even ones too short-lived for the 15 s connection poll
+                dst, dport = m.group("dst"), int(m.group("dport"))
+                ts = float(m.group("ts"))
+                if is_public(dst) and self._cooldown("out", "%s:%d" % (dst, dport), ts):
+                    return {"kind": "conn_out", "dst": dst, "dport": dport, "ts": ts}
+                return None
             if self.own_ip and m.group("dst") != self.own_ip:
                 return None
             ts, src, dport = float(m.group("ts")), m.group("src"), int(m.group("dport"))
@@ -156,7 +166,8 @@ def load_domains(force: bool = False, download: bool = True) -> Set[str]:
 
 
 def tcpdump_cmd(iface: Optional[str], own_ip: Optional[str], read_file: Optional[str] = None) -> List[str]:
-    syn = "(tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn%s)" % (" and dst host %s" % own_ip if own_ip else "")
+    syn = "(tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn%s)" % (
+        " and (dst host %s or src host %s)" % (own_ip, own_ip) if own_ip else "")
     src = ["-r", read_file] if read_file else ["-i", iface or "any"]
     return [find_cmd("tcpdump") or "tcpdump", "-l", "-n", "-e", "-tt", "-s", "256"] + src + [
         "arp or %s or (udp dst port 53)" % syn]
@@ -336,42 +347,50 @@ def run(iface: Optional[str] = None, use_domains: bool = True) -> int:
     if use_domains:
         threading.Thread(target=_domain_refresher, args=(stop, live), daemon=True).start()
     ever_ok, backoff = False, 5.0
+    out = None
     try:
-        with open(str(spool), "a", encoding="utf-8") as out:
-            while True:
-                c = live["ctx"]
-                det = Detector(c["ip"], c["mac"], c["gw"], c["gw_mac"], live["domains"])
-                live["det"] = det
-                cap = Capture(tcpdump_cmd(c["iface"], c["ip"]))
-                live["cap"] = cap
-                _say("KEKKAI sensor: %s (%s) を監視中 / 危険ドメイン %d 件 / Ctrl+C で停止" % (
-                    c["iface"], c["ip"] or "IP不明", len(live["domains"])))
-                assert cap.proc.stdout is not None
-                for line in cap.proc.stdout:
-                    ev = det.feed(line.rstrip("\n"))
-                    if ev:
-                        out.write(json.dumps(ev, ensure_ascii=False) + "\n")
-                        out.flush()
+        out = open(str(spool), "a", encoding="utf-8")
+        while True:
+            c = live["ctx"]
+            det = Detector(c["ip"], c["mac"], c["gw"], c["gw_mac"], live["domains"])
+            live["det"] = det
+            cap = Capture(tcpdump_cmd(c["iface"], c["ip"]))
+            live["cap"] = cap
+            _say("KEKKAI sensor: %s (%s) を監視中 / 危険ドメイン %d 件 / Ctrl+C で停止" % (
+                c["iface"], c["ip"] or "IP不明", len(live["domains"])))
+            assert cap.proc.stdout is not None
+            for line in cap.proc.stdout:
+                ev = det.feed(line.rstrip("\n"))
+                if ev:
+                    out.write(json.dumps(ev, ensure_ascii=False) + "\n")
+                    out.flush()
+                    if ev["kind"] != "conn_out":  # connection records are data, not alerts
                         _say("[!] %s %s" % (ev["kind"], {k: v for k, v in ev.items() if k not in ("kind", "ts")}))
-                rc = cap.finish()
-                if cap.listening.is_set() or time.time() - cap.started > 5:
-                    ever_ok, backoff = True, (5.0 if time.time() - cap.started > 60 else backoff)
-                if live["restart"]:
-                    live["restart"] = False
-                    _say("ネットワークの変更を検知しました。新しい設定で監視を再開します")
-                    continue
-                why = " / ".join(cap.errors) or "終了コード %s" % rc
-                if not ever_ok:
-                    print("tcpdump を開始できませんでした: %s" % why, file=sys.stderr, flush=True)
-                    return 1
-                print("tcpdump が停止しました（%s）。%d 秒後に再開します" % (why, backoff), file=sys.stderr, flush=True)
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 60.0)
-                live["ctx"] = refresh(live["ctx"], sensor_context(plat, iface))
+                    if out.tell() > SPOOL_LIMIT:
+                        out.close()
+                        os.replace(str(spool), str(spool) + ".1")
+                        out = open(str(spool), "a", encoding="utf-8")
+            rc = cap.finish()
+            if cap.listening.is_set() or time.time() - cap.started > 5:
+                ever_ok, backoff = True, (5.0 if time.time() - cap.started > 60 else backoff)
+            if live["restart"]:
+                live["restart"] = False
+                _say("ネットワークの変更を検知しました。新しい設定で監視を再開します")
+                continue
+            why = " / ".join(cap.errors) or "終了コード %s" % rc
+            if not ever_ok:
+                print("tcpdump を開始できませんでした: %s" % why, file=sys.stderr, flush=True)
+                return 1
+            print("tcpdump が停止しました（%s）。%d 秒後に再開します" % (why, backoff), file=sys.stderr, flush=True)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 60.0)
+            live["ctx"] = refresh(live["ctx"], sensor_context(plat, iface))
     except KeyboardInterrupt:
         return 0
     finally:
         stop.set()
+        if out is not None:
+            out.close()
         if live["cap"] is not None:
             live["cap"].stop()
             live["cap"].finish()

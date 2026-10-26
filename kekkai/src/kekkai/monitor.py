@@ -510,12 +510,19 @@ class Monitor:
             chunk = f.read(4 * 1024 * 1024)
             self._sensor_offset = f.tell()
         findings = []
+        polled = {c.get("raddr") for c in self.snapshot("connections") or []}
         for line in chunk.splitlines():
             try:
                 ev = json.loads(line)
             except ValueError:
                 continue
-            fnd = rules.sensor_finding(ev)
+            if ev.get("kind") == "conn_out":
+                if ev.get("dst") in polled:
+                    continue  # the connection poll sees it too, and knows which app it is
+                g, threats = self.intel(str(ev.get("dst")))
+                fnd = rules.sensor_conn_finding(ev, threats, g)
+            else:
+                fnd = rules.sensor_finding(ev)
             if fnd:
                 findings.append(fnd)
         self.raise_findings(findings, (self.state.get("network") or {}).get("id"))
