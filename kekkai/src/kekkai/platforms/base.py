@@ -135,6 +135,9 @@ class Platform:
     def persistence_items(self) -> List[Dict[str, Any]]:
         return []
 
+    def background_items(self) -> List[Dict[str, Any]]:
+        return []
+
     def code_signature(self, path: str) -> Dict[str, Any]:
         return {"checked": False}
 

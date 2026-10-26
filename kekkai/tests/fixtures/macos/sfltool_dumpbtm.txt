@@ -1,0 +1,121 @@
+========================
+ Records for UID -2 : FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE
+========================
+
+ ServiceManagement migrated: true
+ LaunchServices registered: false
+
+ Items:
+
+ #1:
+                 UUID: C8E7DF86-2F45-48B8-84D4-13AF4F6C3F6A
+                 Name: (null)
+       Developer Name: (null)
+                 Type: developer (0x20)
+                Flags: [  ] (0)
+          Disposition: [disabled, allowed, not notified] (0x2)
+           Identifier: Unknown Developer
+                  URL: (null)
+           Generation: 0
+  Embedded Item Identifiers:
+    #1: 16.com.veertu.anka.addons.systemsetup
+
+ #2:
+                 UUID: EE4D379B-3BAF-4F4C-9B97-0094B49253F5
+                 Name: ankaupd.sh
+       Developer Name: (null)
+                 Type: legacy daemon (0x10010)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, not notified] (0x3)
+           Identifier: 16.com.veertu.anka.addons.ankaupd
+                  URL: file:///Library/LaunchDaemons/com.veertu.anka.addons.ankaupd.plist
+      Executable Path: /Library/Application Support/Veertu/Anka/addons/ankaupd.sh
+           Generation: 0
+     Parent Identifier: Unknown Developer
+
+ #3:
+                 UUID: 91FA9106-3D39-483A-814F-98554F8387C7
+                 Name: azbridge
+       Developer Name: (null)
+                 Type: legacy daemon (0x10010)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, notified] (0xb)
+           Identifier: 16.com.azure.relay.bridge
+                  URL: file:///Library/LaunchDaemons/com.azure.relay.bridge.plist
+      Executable Path: /usr/local/share/azbridge/azbridge
+           Generation: 1
+     Parent Identifier: Unknown Developer
+
+ #4:
+                 UUID: 793B452D-1B0F-4C80-B6C2-2160DA42CBA3
+                 Name: change_hostname.sh
+       Developer Name: (null)
+                 Type: legacy daemon (0x10010)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, notified] (0xb)
+           Identifier: 16.change-hostname
+                  URL: file:///Library/LaunchDaemons/change_hostname.plist
+      Executable Path: /usr/local/bin/change_hostname.sh
+           Generation: 1
+     Parent Identifier: Unknown Developer
+
+ #5:
+                 UUID: C35519BA-AEC8-4563-A400-2ACDFB9A7252
+                 Name: launchctl
+       Developer Name: (null)
+                 Type: legacy daemon (0x10010)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, not notified] (0x3)
+           Identifier: 16.com.veertu.anka.addons.ssh
+                  URL: file:///Library/LaunchDaemons/com.veertu.anka.addons.ssh.plist
+      Executable Path: /bin/launchctl
+           Generation: 0
+     Parent Identifier: Unknown Developer
+
+ #6:
+                 UUID: 5E13E14F-84DE-4829-B86B-5024D2C74855
+                 Name: python3
+       Developer Name: (null)
+                 Type: legacy daemon (0x10010)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, notified] (0xb)
+           Identifier: 16.com.kekkai.sensor
+                  URL: file:///Library/LaunchDaemons/com.kekkai.sensor.plist
+      Executable Path: /usr/bin/python3
+           Generation: 1
+     Parent Identifier: Unknown Developer
+
+========================
+ Records for UID 501 : AABBCCDD-1122-3344-5566-778899AABBCC
+========================
+
+ ServiceManagement migrated: true
+ LaunchServices registered: true
+
+ Items:
+
+ #1:
+                 UUID: 1B2C3D4E-5F60-7182-93A4-B5C6D7E8F901
+                 Name: Google Chrome
+       Developer Name: Google LLC
+                 Type: app (0x8)
+                Flags: [ ] (0)
+          Disposition: [enabled, allowed, notified] (0xb)
+           Identifier: com.google.Chrome
+                  URL: file:///Applications/Google%20Chrome.app/
+      Executable Path: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+           Generation: 2
+     Parent Identifier: com.google.Chrome
+
+ #2:
+                 UUID: 2C3D4E5F-6071-8293-A4B5-C6D7E8F90123
+                 Name: sysupd
+       Developer Name: (null)
+                 Type: legacy login item (0x10002)
+                Flags: [ legacy ] (0x1)
+          Disposition: [enabled, allowed, not notified] (0x3)
+           Identifier: com.apple.sysupd
+                  URL: file:///Users/user/Library/Application%20Support/.sysupd/sysupd
+      Executable Path: /Users/user/Library/Application Support/.sysupd/sysupd
+           Generation: 0
+     Parent Identifier: Unknown Developer

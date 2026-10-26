@@ -433,9 +433,19 @@ class Monitor:
             if cur != pbase:
                 self.store.kv_set(pkey, cur)
         findings += rules.wifi_findings(wifi)
+        btm = self._safe("background_items", self.platform.background_items, [])
+        bkey2 = "baseline:btm"
+        bbase = self.store.kv_get(bkey2)
+        cur_btm = [rules.btm_key(x) for x in btm]
+        if bbase is None:
+            self.store.kv_set(bkey2, cur_btm)
+        else:
+            findings += rules.btm_findings(btm, bbase)
+            if set(cur_btm) != set(bbase):
+                self.store.kv_set(bkey2, sorted(set(bbase) | set(cur_btm)))
         with self.lock:
             snap = {"dns": self.state.get("dns"), "proxies": self.state.get("proxies"), "wifi": wifi,
-                    "listeners": self.state.get("listeners"), "persistence": persistence}
+                    "listeners": self.state.get("listeners"), "persistence": persistence, "background_items": btm}
         audit = self._audit(snap, slow=slow)
         mac = self.vulns.macos(self._safe("os_version", self.platform.os_version, None))
         vf = rules.macos_vuln_findings(mac)

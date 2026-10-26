@@ -289,6 +289,48 @@ def persistence_findings(items: List[Dict[str, Any]], baseline: Dict[str, float]
     return out
 
 
+def btm_key(it: Dict[str, Any]) -> str:
+    return "%s|%s|%s" % (it.get("uid"), it.get("identifier") or it.get("name") or "", it.get("executable") or "")
+
+
+def claims_apple(it: Dict[str, Any]) -> bool:
+    ident = (it.get("identifier") or "").lower()
+    return ident.startswith("com.apple.") and it.get("apple") is False
+
+
+def btm_findings(items: List[Dict[str, Any]], baseline: List[str]) -> List[Finding]:
+    """New login/background items (sfltool dumpbtm). Masquerading as Apple, hidden/unsigned paths score highest."""
+    known = set(baseline)
+    out = []
+    for it in items:
+        key = btm_key(it)
+        if key in known or (it.get("identifier") or "") == "16.com.kekkai.sensor":
+            continue
+        exe = it.get("executable")
+        name = it.get("name") or it.get("identifier") or "名称不明"
+        if claims_apple(it):
+            sev, why = "high", "Apple純正を装っていますが、Appleの署名がありません"
+        elif exe and suspicious_path(exe):
+            sev, why = "high", "隠しフォルダ/一時領域から実行されます"
+        elif exe and it.get("signed") is False:
+            sev, why = "medium", "署名がありません"
+        elif it.get("missing"):
+            sev, why = "low", "実行ファイルが見つかりません"
+        elif it.get("apple") or it.get("team"):
+            sev, why = "low", "署名あり（通常のアプリの可能性が高い）"
+        else:
+            sev, why = "medium", "提供元を確認できません"
+        out.append(Finding(
+            "host.login_item_new", sev, "ログイン/常駐項目が追加: %s" % name,
+            "%s（%s / 提供元: %s）が自動起動に登録されています。%s。実行ファイル: %s（出典: macOS Background Task Management、"
+            "MITRE ATT&CK T1547.015）" % (name, it.get("type") or "種別不明", it.get("developer") or it.get("team") or "不明",
+                                       why, exe or it.get("url") or "不明"),
+            "最近入れたアプリによるものか確認。心当たりがなければ システム設定 > 一般 > ログイン項目とスキップ で無効化・削除し、"
+            "実行ファイルの配置元を確認してください。",
+            subject=key, data=it))
+    return out
+
+
 def wifi_findings(wifi: Optional[Dict[str, Any]]) -> List[Finding]:
     if not wifi:
         return []

@@ -8,6 +8,7 @@ from kekkai.platforms import linux as lx
 from kekkai.platforms import macos as mac
 from kekkai.platforms.base import pick_lan
 from kekkai.sensor import Detector, domain_match
+from kekkai.platforms.macos import parse_btm
 
 
 class NetutilTest(unittest.TestCase):
@@ -248,6 +249,30 @@ class SensorTest(unittest.TestCase):
                     "192.168.10.23.53211 > 192.168.10.1.53: 41234+ [1au] A? login.evil-phish.example. (45)")
         self.assertEqual((ev["kind"], ev["matched"]), ("dns_threat", "evil-phish.example"))
         self.assertIsNone(domain_match("example", {"evil-phish.example"}))
+
+
+class BTMTest(unittest.TestCase):
+    def test_parse_real_dumpbtm(self):
+        items = parse_btm(fixture("macos", "sfltool_dumpbtm.txt"))
+        self.assertEqual(len(items), 8)
+        chrome = next(i for i in items if i["identifier"] == "com.google.Chrome")
+        self.assertEqual((chrome["type"], chrome["developer"], chrome["uid"], chrome["enabled"]), ("アプリ", "Google LLC", "501", True))
+        self.assertEqual(chrome["executable"], "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        bad = next(i for i in items if i["identifier"] == "com.apple.sysupd")
+        self.assertEqual(bad["executable"], "/Users/user/Library/Application Support/.sysupd/sysupd")
+        self.assertEqual(bad["type"], "ログイン項目(旧式)")
+
+    def test_btm_findings_flag_masquerade_and_new(self):
+        from kekkai.detect import engine
+        base = parse_btm(fixture("macos", "sfltool_dumpbtm.txt"))
+        for it in base:  # mark as if read with signatures: none are apple here
+            it.setdefault("apple", False)
+        baseline = [engine.btm_key(i) for i in base if i["identifier"] != "com.apple.sysupd"]
+        f = engine.btm_findings(base, baseline)
+        self.assertEqual([x.rule for x in f], ["host.login_item_new"])
+        self.assertEqual((f[0].severity, "com.apple.sysupd"), ("high", f[0].data["identifier"]))
+        self.assertIn("Apple純正を装って", f[0].detail)
+        self.assertEqual(engine.btm_findings(base, [engine.btm_key(i) for i in base]), [])  # nothing new
 
 
 if __name__ == "__main__":

@@ -147,6 +147,8 @@ def intel():
     rep = vulns.update(force=True)
     print("  vulns:", rep)
     check("vuln data (CISA KEV + SOFA) from official sources", all(v == "ok" for v in rep.values()), str(rep))
+    btm = get_platform().background_items()  # as the normal user (no sudo): learn if it returns anything
+    print("  background items (no sudo):", len(btm), [i.get("identifier") for i in btm[:5]])
     ver = get_platform().os_version()
     st = vulns.VulnDB().macos(ver)
     print("  this Mac:", ver, "->", {k: st.get(k) for k in ("line", "latest", "cves", "exploited")} if st else st)

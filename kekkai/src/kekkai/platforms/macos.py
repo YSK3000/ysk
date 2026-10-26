@@ -13,6 +13,7 @@ import os
 import plistlib
 import re
 import threading
+import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 from kekkai.netutil import mac_is_multicast, normalize_mac, parse_ip
@@ -478,6 +479,57 @@ def parse_codesign(rc: int, stderr: str) -> Dict[str, Any]:
 PERSISTENCE_DIRS = ("~/Library/LaunchAgents", "/Library/LaunchAgents", "/Library/LaunchDaemons")
 
 
+_BTM_TYPES = {"app": "アプリ", "developer": "開発元", "legacy daemon": "常駐(旧式Daemon)",
+              "legacy agent": "常駐(旧式Agent)", "legacy login item": "ログイン項目(旧式)", "login item": "ログイン項目",
+              "daemon": "常駐Daemon", "agent": "常駐Agent", "curated": "システム管理"}
+
+
+def parse_btm(text: str) -> List[Dict[str, Any]]:
+    """`sfltool dumpbtm`: login/background items (incl. SMLoginItemSetEnabled and legacy login items)
+    that plain LaunchAgents/Daemons plist reads miss. MITRE ATT&CK T1547.015 / T1543."""
+    out: List[Dict[str, Any]] = []
+    uid: Optional[str] = None
+    cur: Optional[Dict[str, Any]] = None
+
+    def flush() -> None:
+        if cur and (cur.get("identifier") or cur.get("name") or cur.get("executable")):
+            out.append(cur)
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(r"^Records for UID (-?\d+)", line)
+        if m:
+            uid = m.group(1)
+            continue
+        if re.match(r"^#\d+:$", line):
+            flush()
+            cur = {"uid": uid, "name": None, "developer": None, "type": None, "type_raw": None,
+                   "enabled": None, "identifier": None, "url": None, "executable": None, "embedded": []}
+            continue
+        if cur is None or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        key, val = key.strip(), val.strip()
+        v = None if val in ("(null)", "") else val
+        if key == "Name":
+            cur["name"] = v
+        elif key == "Developer Name":
+            cur["developer"] = v
+        elif key == "Type":
+            cur["type_raw"] = v
+            cur["type"] = _BTM_TYPES.get(re.sub(r"\s*\(0x[0-9a-f]+\)$", "", v or ""), v)
+        elif key == "Disposition":
+            cur["enabled"] = val.startswith("[enabled") or ", enabled" in val
+        elif key == "Identifier":
+            cur["identifier"] = v
+        elif key == "URL" and v:
+            cur["url"] = urllib.parse.unquote(v[7:]) if v.startswith("file://") else v
+        elif key == "Executable Path":
+            cur["executable"] = v
+    flush()
+    return out
+
+
 def read_launch_plist(path: str) -> Optional[Dict[str, Any]]:
     try:
         with open(path, "rb") as f:
@@ -620,6 +672,26 @@ class MacOSPlatform(Platform):
                     if info["exists"]:
                         info["signature"] = self.code_signature(prog)
                 items.append(info)
+        return items
+
+    def background_items(self) -> List[Dict[str, Any]]:
+        """Login/background items via sfltool dumpbtm. Full output needs root (the sensor runs it); without
+        root it still returns what the OS allows. Each item is marked apple/signed via its executable."""
+        if not find_cmd("sfltool"):
+            return []
+        rc, out, _ = run(["sfltool", "dumpbtm"], timeout=20)
+        if rc != 0 or "Records for UID" not in out:
+            return []
+        items = parse_btm(out)
+        for it in items:
+            exe = it.get("executable")
+            if exe and os.path.isabs(exe) and os.path.exists(exe):
+                sig = self.code_signature(exe)
+                it["apple"] = sig.get("apple")
+                it["team"] = sig.get("team")
+                it["signed"] = sig.get("signed")
+            else:
+                it["missing"] = bool(exe and os.path.isabs(exe))
         return items
 
     def notify(self, title: str, message: str) -> bool:
