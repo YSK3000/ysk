@@ -76,6 +76,18 @@ def common_checks(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     else:
         out.append(check("listeners", "外部から接続できるサービス", "pass",
                          "要注意のサービスは待ち受けていません（全%d件）" % len(exposed), "", "sharing", 6))
+    btm = snapshot.get("background_items") or []
+    if btm:
+        from kekkai.detect.engine import claims_apple, suspicious_path
+        risky = [b for b in btm if claims_apple(b) or (b.get("executable") and suspicious_path(b["executable"]))]
+        out.append(check("login_items", "ログイン項目・常駐項目(BTM)", "warn" if risky else "pass",
+                         ("要確認 %d件: " % len(risky) + "、".join((b.get("name") or b.get("identifier") or "?") for b in risky[:6]))
+                         if risky else "%d件（Apple純正を装う項目や隠し場所からの実行はありません）" % len(btm),
+                         "システム設定 > 一般 > ログイン項目とスキップ で、見覚えのない項目を無効化・削除。", "persistence", 8))
+    out.append(check("router_hygiene", "ルーターの定期確認", "info",
+                     "家庭用ルーターの乗っ取りが報告されています（警察庁 2023/3 注意喚起）",
+                     "月1回ほど、ルーター管理画面で次を確認: ①管理パスワードが初期値でない ②ファームウェアが最新 "
+                     "③見覚えのないVPN/DDNS/外部管理設定が有効になっていない ④サポート終了機種は買い替え。", "network", 3))
     persist = snapshot.get("persistence") or []
     flagged = [p for p in persist if p.get("flag")]
     if persist:

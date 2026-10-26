@@ -220,6 +220,23 @@ class ExposureTest(unittest.TestCase):
         self.assertTrue(shared["shared_ipv4"])
         self.assertTrue(all(f["severity"] in ("info", "low") for f in shared["findings"]))
 
+    def test_router_admin_exposed(self):
+        res = assess("203.0.113.10", {"found": True, "ports": [443, 7547], "vulns": []},
+                     {"external_ip": "203.0.113.10", "mappings": []})
+        router = [f for f in res["findings"] if "管理画面" in f["title"]]
+        self.assertEqual((len(router), router[0]["severity"]), (1, "high"))
+        self.assertIn("警察庁", router[0]["detail"])
+        shared = assess("203.0.113.10", {"found": True, "ports": [443], "vulns": []},
+                        {"external_ip": "100.64.0.2", "mappings": []})  # CGNAT: not this user's router
+        self.assertEqual([f for f in shared["findings"] if "管理画面" in f["title"]], [])
+
+    def test_audit_has_router_and_btm_rows(self):
+        from kekkai.audit import common_checks
+        rows = {c["id"]: c for c in common_checks({
+            "background_items": [{"identifier": "com.apple.x", "apple": False, "name": "x", "executable": "/Users/u/.h/x"}]})}
+        self.assertEqual(rows["router_hygiene"]["status"], "info")
+        self.assertEqual(rows["login_items"]["status"], "warn")  # hidden-path exe is flagged
+
 
 class WorldDataTest(unittest.TestCase):
     def test_world_json(self):

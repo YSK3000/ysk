@@ -74,6 +74,16 @@ def assess(public: Optional[str], idb: Optional[Dict[str, Any]], upnp: Optional[
                 sev = "info"
             findings.append({"severity": sev, "title": "インターネットからポート %d が見えています" % p,
                              "detail": (label or "サービス") + "。ルーターのポート開放/UPnP設定を確認してください。", "port": p})
+    admin_ports = {80, 443, 7547, 8080, 8443, 8291, 10443, 4443}
+    if idb and idb.get("found") and not shared:
+        seen_admin = sorted(p for p in (int(x) for x in idb.get("ports", []) if str(x).isdigit()) if p in admin_ports)
+        if seen_admin:
+            findings.append({"severity": "high", "title": "ルーターの管理画面が外部から見える可能性",
+                             "detail": ("インターネットからポート %s が見えています。家庭用ルーターが外部から乗っ取られ、"
+                                        "VPN・DDNS・外部管理が勝手に有効化される攻撃が報告されています（警察庁 2023/3 注意喚起）。"
+                                        "確認: ①管理画面IDとパスワードを初期値から変更 ②ファームウェアを最新に ③見覚えのないVPN/DDNS/"
+                                        "外部管理設定が有効になっていないか ④サポート終了機種は買い替え。") % "、".join(map(str, seen_admin)),
+                             "ports": seen_admin})
     for m in (upnp or {}).get("mappings", []):
         findings.append({"severity": "medium", "title": "UPnPでポート %s/%s が開放されています" % (m.get("external_port"), m.get("protocol")),
                          "detail": "転送先 %s:%s（%s）。心当たりがなければルーターで削除し、UPnPを無効化してください。" % (
