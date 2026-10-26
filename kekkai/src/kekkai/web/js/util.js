@@ -61,8 +61,12 @@ async function handle(r) {
   return body;
 }
 
-export async function api(path) {
-  return handle(await fetch(path, { credentials: "same-origin", cache: "no-store" }));
+export async function api(path, timeout = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await handle(await fetch(path, { credentials: "same-origin", cache: "no-store", signal: controller.signal }));
+  } finally { clearTimeout(timer); }
 }
 
 export async function post(path, body) {

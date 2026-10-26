@@ -29,6 +29,9 @@ INSTRUCTIONS = (
 RO = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
 
 TOOLS: List[Dict[str, Any]] = [
+    {"name": "kekkai_coverage", "title": "防御機能の稼働状況",
+     "description": "Read actual collection status, threat-feed readiness, sensor heartbeat, optional Nmap availability and protection gaps. Does not scan or install anything.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}, "annotations": RO},
     {"name": "kekkai_status", "title": "全体の状況",
      "description": "Threat level, current network, counts of devices/connections/alerts, defense score and data freshness. "
                     "Runs one fresh collection cycle.",
@@ -118,6 +121,14 @@ class KekkaiTools:
         s.pop("health", None)
         s["feeds"] = [{k: f[k] for k in ("id", "entries", "status")} for f in m.feeds.status()]
         return s
+
+    def t_coverage(self, a: Dict[str, Any]) -> Any:
+        from kekkai.coverage import describe
+        try:
+            self.m.fast_cycle()
+        except Exception as e:  # diagnostics must still explain a failed collector
+            self.m._health("fast", False, 0, "%s: %s" % (type(e).__name__, e))
+        return describe(self.m)
 
     def t_alerts(self, a: Dict[str, Any]) -> Any:
         status = a.get("status", "active")

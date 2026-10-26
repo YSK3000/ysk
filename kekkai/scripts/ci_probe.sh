@@ -18,9 +18,26 @@ curl -sS -m 30 https://onion.torproject.org/ -o /tmp/onions.html
 ONIONS=$(grep -oE '[a-z2-7]{56}\.onion' /tmp/onions.html | awk '!seen[$0]++' | head -8)
 echo "official onion addresses found: $(echo "$ONIONS" | wc -l)"
 OK=0
+ONION_OUTPUT=$(mktemp)
 for o in $ONIONS; do
-  if PYTHONPATH=src $PY -m kekkai onion "http://$o/" | head -3; then OK=1; echo "PASS read http://$o/ through Tor"; break; fi
+  # Do not pipe the command into head: head can succeed even when KEKKAI failed.
+  if PYTHONPATH=src "$PY" -m kekkai onion "http://$o/" --json > "$ONION_OUTPUT"; then
+    if "$PY" - "$ONION_OUTPUT" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        page = json.load(f)
+    ok = (isinstance(page, dict) and isinstance(page.get("status"), int)
+          and 200 <= page["status"] < 300 and not page.get("skipped")
+          and isinstance(page.get("text"), str) and bool(page["text"].strip()))
+except (OSError, ValueError):
+    ok = False
+sys.exit(0 if ok else 1)
+PY
+    then OK=1; echo "PASS read http://$o/ through Tor (HTTP 2xx, nonempty text)"; break; fi
+  fi
 done
+rm -f "$ONION_OUTPUT"
 kill $TOR
 [ $OK = 1 ] || { echo "FAIL: could not read any official .onion page"; exit 1; }
 

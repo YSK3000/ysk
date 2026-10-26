@@ -140,12 +140,13 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
     if sess:
         out.append(sess)
     if monitor is not None:
+        state = monitor.monitoring_status()
         stalls = monitor.check_stalls()
         errs = {k: v.get("last_error") for k, v in monitor.state.get("health", {}).items()
                 if isinstance(v, dict) and v.get("last_error")}
-        if stalls or errs:
+        if stalls or errs or state["status"] != "live":
             out.append(_c("監視ループ", "warn", "停止: %s / エラー: %s" % (", ".join(stalls) or "-", "; ".join(
-                "%s=%s" % (k, (v or "")[:80]) for k, v in errs.items()) or "-"), "ログ（--verbose）を確認し、再起動してください"))
+                "%s=%s" % (k, (v or "")[:80]) for k, v in errs.items()) or state["label"]), "画面上部の収集状態とログを確認してください"))
         else:
             out.append(_c("監視ループ", "ok", "すべて正常に動作中"))
     if not quick:

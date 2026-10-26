@@ -22,6 +22,11 @@ def markdown(m: Any, max_alerts: int = 30) -> str:
     lines.append("# 結界 KEKKAI セキュリティレポート")
     lines.append("")
     lines.append("- 作成: %s / プラットフォーム: %s / KEKKAI v%s" % (iso(time.time()), st.get("platform"), st.get("version")))
+    monitoring = m.monitoring_status()
+    lines.append("- 収集状態: **%s** / 最終成功: %s" % (
+        monitoring["label"], iso(monitoring["last_success"]) if monitoring["last_success"] else "未取得"))
+    if monitoring["status"] != "live":
+        lines.append("- 現在の安全性は判定できません。以下には前回の収集結果が含まれる場合があります。")
     lines.append("- 脅威レベル: **%s (%d/5)** — 未対応: %s" % (threat["label"], threat["level"], ", ".join(
         "%s %d" % (SEV_JA[k], v) for k, v in threat["counts"].items() if v) or "なし"))
     lines.append("- ネットワーク: %s %s（GW %s / %s）%s" % (

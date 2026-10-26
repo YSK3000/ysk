@@ -63,6 +63,15 @@ def monitor() -> Any:
 # ---------------------------------------------------------------------- commands
 
 def cmd_serve(a: argparse.Namespace) -> int:
+    from kekkai.live_runtime import single_monitor
+    with single_monitor() as acquired:
+        if not acquired:
+            print("監視はすでに起動しています。./kekkai open で画面を開いてください。")
+            return 1
+        return _serve_live(a)
+
+
+def _serve_live(a: argparse.Namespace) -> int:
     from kekkai import config, server
     from kekkai.discovery.portscan import raise_fd_limit
     raise_fd_limit()

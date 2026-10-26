@@ -131,7 +131,12 @@ class LinuxPlatform(Platform):
     name = "linux"
 
     def interfaces(self) -> List[Interface]:
-        names = sorted(n for _, n in socket.if_nameindex())
+        try:
+            names = sorted(n for _, n in socket.if_nameindex())
+        except OSError:
+            # Some container runtimes disable netlink enumeration; sysfs still
+            # provides the real interface inventory without generating traffic.
+            names = sorted(os.listdir("/sys/class/net"))
         v6: Dict[str, List[Tuple[str, int]]] = {}
         for line in _read("/proc/net/if_inet6").splitlines():
             p = line.split()

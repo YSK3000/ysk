@@ -143,16 +143,17 @@ def uninstall_sensor() -> int:
 
 def clean_state_dir(d: Path) -> None:
     """Remove only what the sensor itself created, then the directory if it is empty."""
+    if d.is_symlink():
+        return
     if (d / "code" / "DIGEST").exists():
         shutil.rmtree(str(d / "code"), ignore_errors=True)
-    # Remove every plain file the sensor left here (events.jsonl[.1], heartbeat,
-    # domains-tif-mini.txt, btm.json, ...). Scan instead of a fixed list so new
-    # state files are not left behind; don't follow symlinks or recurse into
-    # unexpected subdirectories, leave those for the user to see.
+    # Include the BTM snapshot and rotated spool, but preserve unrelated files
+    # (and symlinks) even if the user put them beside the sensor's state.
+    owned_files = {"events.jsonl", "events.jsonl.1", "heartbeat", "domains-tif-mini.txt", "btm.json"}
     try:
         with os.scandir(str(d)) as it:
             for entry in it:
-                if entry.is_file(follow_symlinks=False):
+                if entry.name in owned_files and entry.is_file(follow_symlinks=False):
                     try:
                         os.unlink(entry.path)
                     except OSError:
