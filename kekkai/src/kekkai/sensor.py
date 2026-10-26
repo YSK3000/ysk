@@ -29,6 +29,7 @@ DOMAIN_FEED_URL = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/
 SPOOL_LIMIT = 20 * 1024 * 1024  # events.jsonl is rotated to events.jsonl.1 beyond this
 HEARTBEAT_EVERY = 5.0   # seconds; the dashboard treats a heartbeat older than 30 s as "sensor stopped"
 CONTEXT_EVERY = 30.0    # how often the sensor checks whether the Mac moved to another network
+BTM_EVERY = 300.0       # how often the (root) sensor snapshots login/background items for the dashboard
 
 ARP_REQ = re.compile(r"^(?P<ts>\d+\.\d+) (?P<smac>[0-9a-f:]{11,17}) > [0-9a-f:]{11,17}, ethertype ARP .*?"
                      r"Request who-has (?P<target>[\d.]+)(?: \([0-9a-f:]+\))? tell (?P<sender>[\d.]+)")
@@ -285,13 +286,29 @@ def on_context(state: Dict[str, Any], new: Dict[str, Any]) -> None:
         cur["macs"] = new["macs"]  # follow the LAN's devices over time, but never while the router MAC is disputed
 
 
+def dump_btm(plat: Any) -> None:
+    """Snapshot login/background items (needs root; sfltool returns nothing otherwise) for the dashboard."""
+    try:
+        items = plat.background_items()
+    except Exception as e:  # noqa: BLE001
+        log.debug("btm dump failed: %s", e)
+        return
+    if items:
+        atomic_write(str(state_dir() / "btm.json"),
+                     json.dumps({"ts": time.time(), "items": items}, ensure_ascii=False).encode(), 0o644)
+
+
 def _keeper(stop: threading.Event, beat: Any, state: Dict[str, Any], plat: Any, want: Optional[str]) -> None:
     """Heartbeat while tcpdump is alive (even on a quiet network) and recapture when the Mac changes network."""
     last_ctx = time.time()
+    last_btm = 0.0
     while not stop.wait(HEARTBEAT_EVERY):
         cap = state.get("cap")
         if cap is not None and cap.alive():
             _beat(beat)
+        if time.time() - last_btm >= BTM_EVERY:
+            last_btm = time.time()
+            dump_btm(plat)
         if time.time() - last_ctx < CONTEXT_EVERY:
             continue
         last_ctx = time.time()

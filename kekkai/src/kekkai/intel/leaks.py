@@ -40,17 +40,24 @@ def search_ransomware_live(terms: List[str], fetch: Callable[..., Any] = http_ge
     wants = [_norm(t) for t in terms if _norm(t)]
     doms = {_domain(t) for t in terms if "." in t}
     if not wants:
-        return {"source": "ransomware.live", "matches": [], "checked": 0, "error": None}
+        return {"source": "ransomware.live", "attribution": ATTRIBUTION, "matches": [], "checked": 0,
+                "error": None, "rate_limited": False, "queries": [], "queried": [], "ts": time.time()}
     seen: Dict[str, Dict[str, Any]] = {}
     checked = 0
     error = None
-    queries = {w.split()[0] for w in wants if len(w.split()[0]) >= 3}
+    rate_limited = False
+    done: List[str] = []
+    queries = sorted({w.split()[0] for w in wants if len(w.split()[0]) >= 3})
     try:
-        for q in sorted(queries)[:12]:
+        for q in queries:
             status, _, body = fetch("%s/searchvictims/%s" % (RL_BASE, urllib.parse.quote(q)),
                                     timeout=30, max_bytes=16 * 1024 * 1024)
+            if status == 429:  # ransomware.live: the search endpoint allows about 1 request per minute
+                rate_limited = True
+                break
             if status != 200:
                 continue
+            done.append(q)
             rows = json.loads(body.decode("utf-8", "replace"))
             checked += len(rows) if isinstance(rows, list) else 0
             for r in rows if isinstance(rows, list) else []:
@@ -62,7 +69,8 @@ def search_ransomware_live(terms: List[str], fetch: Callable[..., Any] = http_ge
     except (FetchError, ValueError) as e:
         error = str(e)
     return {"source": "ransomware.live", "attribution": ATTRIBUTION, "matches": list(seen.values()),
-            "checked": checked, "error": error, "ts": time.time()}
+            "checked": checked, "error": error, "rate_limited": rate_limited,
+            "queries": queries, "queried": done, "ts": time.time()}
 
 
 def check(targets: List[str], fetch: Callable[..., Any] = http_get) -> Dict[str, Any]:

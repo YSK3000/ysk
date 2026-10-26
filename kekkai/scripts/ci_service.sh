@@ -68,6 +68,10 @@ s.close()"
 for _ in $(seq 20); do grep -q '"dst": "1.1.1.1"' "$STATE/events.jsonl" 2>/dev/null && break; sleep 0.5; done
 grep -q '"kind": "conn_out", "dst": "1.1.1.1"' "$STATE/events.jsonl" || fail "daemon did not record a short outbound connection"
 echo "PASS short outbound connection recorded: $(grep '"dst": "1.1.1.1"' "$STATE/events.jsonl" | head -1)"
+for _ in $(seq 20); do [ -f "$STATE/btm.json" ] && break; sleep 1; done
+[ -f "$STATE/btm.json" ] || fail "root sensor did not snapshot login items (btm.json) — dashboard would see none"
+$PY -c "import json,sys; d=json.load(open(sys.argv[1])); print('btm items:', len(d['items'])); sys.exit(0 if d['items'] else 1)" "$STATE/btm.json" || fail "btm.json has no items"
+echo "PASS root sensor snapshotted login/background items for the dashboard"
 ./kekkai doctor --quick | grep "パケットセンサー" | tee /dev/stderr | grep -q "監視中" || fail "doctor does not see the running sensor"
 sudo ./kekkai uninstall-sensor || fail "uninstall-sensor"
 sleep 1

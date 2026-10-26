@@ -274,6 +274,20 @@ class BTMTest(unittest.TestCase):
         self.assertIn("Apple純正を装って", f[0].detail)
         self.assertEqual(engine.btm_findings(base, [engine.btm_key(i) for i in base]), [])  # nothing new
 
+    def test_monitor_prefers_sensor_btm_snapshot(self):
+        import json as _json
+        import time as _time
+        import _fakenet
+        from kekkai import config
+        from kekkai.monitor import Monitor
+        from kekkai.sensor import state_dir
+        snap = state_dir() / "btm.json"
+        snap.write_text(_json.dumps({"ts": _time.time(), "items": [{"identifier": "com.x", "name": "x"}]}))
+        self.addCleanup(lambda: snap.exists() and snap.unlink())
+        m = Monitor(config.load(), store=_fakenet.Store(":memory:"), platform=_fakenet.FakePlatform())
+        self.assertEqual([i["identifier"] for i in m._collect_btm()], ["com.x"])  # from the root sensor's snapshot
+        m.store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

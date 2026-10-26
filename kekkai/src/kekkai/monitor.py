@@ -415,6 +415,19 @@ class Monitor:
             self._health("lan", False, time.time() - t0, repr(e))
             raise
 
+    def _collect_btm(self) -> List[Dict[str, Any]]:
+        """Login/background items. sfltool needs root, so prefer the root sensor's recent snapshot;
+        fall back to a direct read (works only if the dashboard itself runs as root)."""
+        from kekkai.sensor import state_dir
+        snap = state_dir() / "btm.json"
+        try:
+            if snap.exists() and time.time() - snap.stat().st_mtime < 86400:
+                with open(str(snap), "r", encoding="utf-8") as f:
+                    return json.load(f).get("items") or []
+        except (OSError, ValueError):
+            pass
+        return self._safe("background_items", self.platform.background_items, [])
+
     def posture_cycle(self, slow: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         wifi = self._safe("wifi", self.platform.wifi, None)
@@ -433,7 +446,7 @@ class Monitor:
             if cur != pbase:
                 self.store.kv_set(pkey, cur)
         findings += rules.wifi_findings(wifi)
-        btm = self._safe("background_items", self.platform.background_items, [])
+        btm = self._collect_btm()
         bkey2 = "baseline:btm"
         bbase = self.store.kv_get(bkey2)
         cur_btm = [rules.btm_key(x) for x in btm]

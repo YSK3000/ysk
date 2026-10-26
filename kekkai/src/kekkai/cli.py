@@ -384,6 +384,9 @@ def cmd_leaks(a: argparse.Namespace) -> int:
     src = res["sources"][0]
     if src.get("error"):
         print("  取得エラー: %s" % src["error"])
+    if src.get("rate_limited"):
+        print("  ※ 情報源の制限（1分に1回）のため一部の語のみ確認しました（確認済み: %s）。時間をおいて再実行してください。"
+              % "、".join(src.get("queried") or []) or "なし")
     if not res["match_count"]:
         print("  一致はありませんでした（照合 %d 件）。%s" % (src.get("checked", 0), src.get("attribution", "")))
         return 0

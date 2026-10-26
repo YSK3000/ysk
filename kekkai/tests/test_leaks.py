@@ -51,6 +51,16 @@ class LeaksTest(unittest.TestCase):
     def test_empty_targets_noop(self):
         self.assertEqual(leaks.check([], fetch=fake_fetch([]))["match_count"], 0)
 
+    def test_rate_limit_stops_and_is_reported(self):
+        calls = []
+        def rl(url, **_):
+            calls.append(url)
+            return (429, {}, b'{"message": "1 per 1 minute"}')
+        res = leaks.search_ransomware_live(["ACME Corporation", "example.co.jp"], fetch=rl)
+        self.assertTrue(res["rate_limited"])
+        self.assertEqual(len(calls), 1)  # stops at the first 429 instead of hammering
+        self.assertIsNone(res["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
