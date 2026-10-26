@@ -1,0 +1,40 @@
+{
+  "SPAirPortDataType" : [
+    {
+      "spairport_airport_interfaces" : [
+        {
+          "_name" : "en0",
+          "spairport_airport_other_local_wireless_networks" : [
+            {
+              "_name" : "KEKKAI-HOME-5G",
+              "spairport_network_channel" : "6 (2GHz, 20MHz)",
+              "spairport_network_phymode" : "802.11",
+              "spairport_network_type" : "spairport_network_type_station",
+              "spairport_security_mode" : "pairport_security_mode_none",
+              "spairport_signal_noise" : "-71 dBm / -94 dBm"
+            },
+            {
+              "_name" : "aterm-5f3c21-a",
+              "spairport_network_channel" : "36 (5GHz, 80MHz)",
+              "spairport_network_phymode" : "802.11ax",
+              "spairport_security_mode" : "spairport_security_mode_wpa2_personal"
+            }
+          ],
+          "spairport_current_network_information" : {
+            "_name" : "KEKKAI-HOME-5G",
+            "spairport_network_channel" : "149 (5GHz, 80MHz)",
+            "spairport_network_country_code" : "JP",
+            "spairport_network_phymode" : "802.11ax",
+            "spairport_network_type" : "spairport_network_type_station",
+            "spairport_security_mode" : "spairport_security_mode_wpa3_transition",
+            "spairport_signal_noise" : "-52 dBm / -93 dBm"
+          },
+          "spairport_status_information" : "spairport_status_connected"
+        },
+        {
+          "_name" : "awdl0"
+        }
+      ]
+    }
+  ]
+}

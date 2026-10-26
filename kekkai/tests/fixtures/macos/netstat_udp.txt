@@ -1,0 +1,5 @@
+Active Internet connections (including servers)
+Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)      rxbytes      txbytes  rhiwat  shiwat    pid   epid state  options           gencnt    flags   flags1 usscnt rtncnt fltrs
+udp4       0      0  *.5353                 *.*                                 1234          0  786896    9216    331      0 00000 00000000 0000000000000d5f 00000000 00000800      1      0 000001
+udp4       0      0  192.168.10.23.61234    142.250.196.110.443                98765       4321  786896    9216    414      0 00000 00000000 0000000000000e6a 00000000 00000800      1      0 000001
+udp6       0      0  *.5353                 *.*                                    0          0  786896    9216    331      0 00000 00000000 0000000000000f7b 00000000 00000800      1      0 000001

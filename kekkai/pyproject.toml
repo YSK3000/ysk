@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kekkai"
+version = "0.1.0"
+description = "結界 KEKKAI — home network defense console for macOS (LAN map, live world map, IDS-lite, posture audit, MCP)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Unlicense" }
+dependencies = []
+
+[project.optional-dependencies]
+claude = ["anthropic"]
+
+[project.scripts]
+kekkai = "kekkai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+kekkai = ["web/*.html", "web/*.svg", "web/css/*.css", "web/js/*.js", "web/data/*.json"]

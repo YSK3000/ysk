@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "kekkai": {
+      "type": "stdio",
+      "command": "./kekkai/kekkai",
+      "args": ["mcp"]
+    }
+  }
+}

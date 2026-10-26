@@ -1,0 +1,7 @@
+    1     0     0 /sbin/launchd
+  331     1    65 /usr/sbin/mDNSResponder
+  414     1   501 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+  520     1   501 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter
+ 6666     1   501 /Users/Shared/.sysmond/sysmond
+  900   880   501 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python
+  950     1   501 (kernel_task)

@@ -1,0 +1,14 @@
+#!/bin/sh
+# KEKKAI launcher: ./kekkai <command>   (help: ./kekkai -h)
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PY="${KEKKAI_PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+fi
+if [ -z "$PY" ]; then
+  echo "python3 が見つかりません。macOSなら: xcode-select --install" >&2
+  exit 1
+fi
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec "$PY" -m kekkai "$@"

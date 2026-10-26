@@ -1,0 +1,73 @@
+name: KEKKAI
+
+on:
+  push:
+    paths: ["kekkai/**", ".github/workflows/kekkai.yml"]
+  pull_request:
+    paths: ["kekkai/**", ".github/workflows/kekkai.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kekkai-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: macos-latest, python: "3.13" }
+    defaults:
+      run:
+        working-directory: kekkai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+
+  macos-smoke:
+    name: macOS real-machine smoke (Apple python3)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: kekkai
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apple-bundled Python (what a fresh Mac has)
+        run: /usr/bin/python3 --version && /usr/bin/python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+      - name: unit tests on Apple python3
+        run: /usr/bin/python3 -m unittest discover -s tests
+      - name: real collectors, downloads, server, MCP
+        run: /usr/bin/python3 scripts/ci_smoke.py
+      - name: packet sensor (sudo tcpdump, 20s)
+        run: |
+          sudo -E env PYTHONPATH=src /usr/bin/python3 -m kekkai sensor --no-domains &
+          SENSOR=$!
+          sleep 4
+          /usr/bin/python3 - <<'PY'
+          import socket
+          for port in range(20, 60):
+              s = socket.socket()
+              s.settimeout(0.2)
+              try:
+                  s.connect(("127.0.0.1", port))
+              except OSError:
+                  pass
+              s.close()
+          PY
+          sleep 14
+          sudo kill $SENSOR || true
+          ls -la "$HOME/Library/Application Support/KEKKAI/sensor" || true
+          cat "$HOME/Library/Application Support/KEKKAI/sensor/events.jsonl" || true

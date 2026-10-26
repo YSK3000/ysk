@@ -1,0 +1,13 @@
+Executable=/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter
+Identifier=com.apple.controlcenter
+Format=app bundle with Mach-O universal (x86_64 arm64e)
+CodeDirectory v=20400 size=14337 flags=0x0(none) hashes=438+7 location=embedded
+Platform identifier=15
+Signature size=4442
+Authority=Software Signing
+Authority=Apple Code Signing Certification Authority
+Authority=Apple Root CA
+Info.plist entries=33
+TeamIdentifier=not set
+Sealed Resources version=2 rules=2 files=1234
+Internal requirements count=1 size=80
