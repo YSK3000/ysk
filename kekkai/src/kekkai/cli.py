@@ -367,6 +367,35 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_leaks(a: argparse.Namespace) -> int:
+    from kekkai import config
+    from kekkai.intel import leaks
+    cfg = config.load()
+    targets = a.target or [str(x) for x in (cfg.get("watch.names", []) or []) + (cfg.get("watch.domains", []) or [])]
+    if not targets:
+        print("  監視対象が未設定です。例: ./kekkai leaks --target \"自社名\" example.co.jp")
+        print("  または config.json の watch.names / watch.domains に登録してください。")
+        return 2
+    print("  公開情報源（Ransomware.live）で照合中: %s" % "、".join(targets))
+    res = leaks.check(targets)
+    if a.json:
+        print(dumps(res))
+        return 0
+    src = res["sources"][0]
+    if src.get("error"):
+        print("  取得エラー: %s" % src["error"])
+    if not res["match_count"]:
+        print("  一致はありませんでした（照合 %d 件）。%s" % (src.get("checked", 0), src.get("attribution", "")))
+        return 0
+    print("  ⚠ %d 件の一致が見つかりました:" % res["match_count"])
+    for m in src["matches"]:
+        print("   - %s | グループ: %s | %s | %s" % (m.get("victim") or m.get("post_title"), m.get("group") or m.get("group_name"),
+                                                 (m.get("attackdate") or m.get("discovered") or "")[:10],
+                                                 m.get("url") or m.get("post_url") or ""))
+    print("  " + src.get("attribution", ""))
+    return 3
+
+
 def cmd_onion(a: argparse.Namespace) -> int:
     from kekkai.intel import tor
     try:
@@ -485,6 +514,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("mcp", help="MCPサーバー（Claude Code / Claude Desktop 用）").set_defaults(fn=cmd_mcp)
     sub.add_parser("install-agent", help="ログイン時に自動起動（macOS）").set_defaults(fn=cmd_install_agent)
     sub.add_parser("uninstall-agent", help="自動起動を解除").set_defaults(fn=cmd_uninstall_agent)
+    s = sub.add_parser("leaks", help="自分のドメイン・組織名が暴露サイトに載っていないか確認")
+    s.add_argument("--target", nargs="+", help="確認する語（未指定なら config の watch.* を使用）")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_leaks)
     s = sub.add_parser("onion", help=".onion のページを Tor 経由で読む（文字情報のみ）")
     s.add_argument("url")
     s.add_argument("--find", nargs="+", help="この語を含む行だけ表示（メールアドレス・社名など）")

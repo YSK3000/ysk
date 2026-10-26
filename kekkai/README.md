@@ -101,6 +101,8 @@ sudo ./kekkai install-sensor         パケットセンサーを常時監視に�
 ./kekkai lookup 1.2.3.4 [--external] IPの照会（GeoIP・脅威リスト・Shodan/GreyNoise）
 ./kekkai report [--out report.md]    Markdownレポート（家族やAIへの相談用）
 ./kekkai update [--force]            GeoIP・脅威リストの更新（自動でも12時間ごと）
+./kekkai leaks [--target 語...]       自分のドメイン・組織名が暴露サイトに載っていないか確認
+./kekkai onion <URL> [--find 語...]  .onion のページを Tor 経由で読む（要 tor、文字情報のみ）
 ./kekkai doctor                      自己診断
 sudo ./kekkai sensor                 パケットセンサーをこのターミナルで動かす（常時監視を使わない場合）
 ./kekkai uninstall-agent / sudo ./kekkai uninstall-sensor   自動起動・常時監視の解除

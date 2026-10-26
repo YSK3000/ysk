@@ -461,6 +461,25 @@ def exposure_kev_findings(public_ip: Optional[str], kev_hits: List[Dict[str, Any
                     subject="%s|kev" % public_ip, data={"cves": [k["cveID"] for k in kev_hits]})]
 
 
+def leak_findings(result: Dict[str, Any]) -> List[Finding]:
+    """A victim listing on a ransomware leak site matching one of the user's own identifiers."""
+    out = []
+    for src in result.get("sources") or []:
+        for m in src.get("matches") or []:
+            name = m.get("victim") or m.get("post_title") or m.get("domain") or "?"
+            where = m.get("url") or m.get("post_url") or m.get("claim_url") or ""
+            when = m.get("attackdate") or m.get("discovered") or m.get("published") or ""
+            out.append(Finding(
+                "leak.ransomware", "critical", "情報漏えいの可能性: %s がランサムウェアの暴露サイトに掲載" % name,
+                "攻撃グループ「%s」の暴露サイトに「%s」(%s) が被害組織として掲載されています（%s）。%s。%s" % (
+                    m.get("group") or m.get("group_name") or "不明", name, m.get("domain") or "", when[:10],
+                    src.get("attribution", ""), "掲載先: " + where if where else ""),
+                "本当に自分/自社が対象か確認してください。該当する場合は、関係者への連絡・パスワード全変更・2段階認証・"
+                "専門家やJPCERT/CCへの相談を。漏えいデータそのものはダウンロードしないでください。",
+                subject=str(where or name), data=m))
+    return out
+
+
 def threat_level(counts: Dict[str, int]) -> Tuple[int, str]:
     if counts.get("critical"):
         return 5, "CRITICAL"

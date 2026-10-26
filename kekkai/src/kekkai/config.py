@@ -16,7 +16,13 @@ DEFAULTS: Dict[str, Any] = {
         "active_sweep": True,          # ping the local /24 so the ARP table fills up
         "posture_interval_sec": 1800,
         "exposure_interval_sec": 21600,
+        "leak_check_interval_sec": 86400,   # ransomware.live leak-site check (only if watch.names is set)
         "learning_cycles": 2,          # first cycles only build the baseline
+    },
+    "watch": {
+        # Your own identifiers to look for in public breach/leak sources. Leave empty to disable.
+        "names": [],                   # company / org names, e.g. ["ACME Corp"]
+        "domains": [],                 # your domains, e.g. ["acme.co.jp"]
     },
     "home": {"lat": None, "lon": None, "label": "HOME"},
     "intel": {

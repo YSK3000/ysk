@@ -99,7 +99,7 @@ class Monitor:
             "network": None, "home": dict(DEFAULT_HOME), "connections": [], "listeners": [], "neighbors": [],
             "dns": [], "proxies": {}, "wifi": None, "persistence": [], "posture": None, "exposure": None,
             "upnp": None, "lan": {"running": False, "last": None, "stats": None},
-            "health": {}, "sensor": {"active": False}, "cycle": 0,
+            "health": {}, "sensor": {"active": False}, "leaks": None, "cycle": 0,
         }
         self._load_home()
 
@@ -532,6 +532,25 @@ class Monitor:
         self._health("intel", True, time.time() - t0)
         return report
 
+    def leak_watch_targets(self) -> List[str]:
+        return [str(x) for x in (self.cfg.get("watch.names", []) or []) + (self.cfg.get("watch.domains", []) or []) if str(x).strip()]
+
+    def leak_cycle(self, force: bool = False) -> Dict[str, Any]:
+        t0 = time.time()
+        targets = self.leak_watch_targets()
+        if not targets or not self.cfg.get("privacy.external_lookups", True):
+            with self.lock:
+                self.state["leaks"] = {"enabled": False, "targets": targets}
+            return {"skipped": "not configured"}
+        from kekkai.intel import leaks
+        res = leaks.check(targets)
+        self.raise_findings(rules.leak_findings(res), (self.state.get("network") or {}).get("id"))
+        with self.lock:
+            self.state["leaks"] = {"enabled": True, "targets": targets, "match_count": res["match_count"],
+                                   "checked_at": res["ts"], "error": (res["sources"][0] or {}).get("error")}
+        self._health("leak", True, time.time() - t0)
+        return res
+
     def sensor_cycle(self) -> None:
         from kekkai.sensor import state_dir
         spool = str(state_dir() / "events.jsonl")
@@ -639,6 +658,7 @@ class Monitor:
             ("posture", self.posture_cycle, lambda: float(c.get("monitor.posture_interval_sec", 1800)), 8.0),
             ("exposure", self.exposure_cycle, lambda: float(c.get("monitor.exposure_interval_sec", 21600)), 25.0),
             ("intel", self.intel_cycle, lambda: 3600.0, 2.0),
+            ("leak", self.leak_cycle, lambda: float(c.get("monitor.leak_check_interval_sec", 86400)), 30.0),
             ("sensor", self.sensor_cycle, lambda: 3.0, 3.0),
             ("prune", self.store.prune, lambda: 86400.0, 60.0),
         ]

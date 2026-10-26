@@ -153,6 +153,10 @@ def intel():
     st = vulns.VulnDB().macos(ver)
     print("  this Mac:", ver, "->", {k: st.get(k) for k in ("line", "latest", "cves", "exploited")} if st else st)
     check("macOS version matched to a SOFA line", bool(st and st.get("line")), str(ver))
+    from kekkai.intel import leaks
+    lk = leaks.search_ransomware_live(["bank"])  # exercises the real v2 API + parser end to end
+    print("  ransomware.live: checked", lk["checked"], "matches", len(lk["matches"]), "err", lk["error"])
+    check("ransomware.live API v2 parsed", lk["error"] is None and lk["checked"] > 0, str(lk["error"]))
 
 
 def exposure_and_lan():
