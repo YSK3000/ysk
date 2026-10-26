@@ -59,3 +59,5 @@ jobs:
         run: /usr/bin/python3 scripts/ci_smoke.py
       - name: everyday setup (auto-start agent, always-on sensor daemon, live detection, uninstall)
         run: scripts/ci_service.sh
+      - name: measure real behaviour before building on it (Tor .onion, ransomware.live API, BTM)
+        run: scripts/ci_probe.sh

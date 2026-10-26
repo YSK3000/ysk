@@ -367,6 +367,30 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_onion(a: argparse.Namespace) -> int:
+    from kekkai.intel import tor
+    try:
+        page = tor.fetch_onion(a.url)
+    except (tor.TorError, OSError) as e:
+        print("  取得できませんでした: %s" % e)
+        return 1
+    if a.json:
+        print(dumps(page))
+        return 0
+    print("  %s  HTTP %s  %s" % (page["url"], page["status"], page.get("title") or ""))
+    if page.get("skipped"):
+        print("  " + page["skipped"])
+    text = page.get("text") or ""
+    if a.find:
+        hits = [ln for ln in text.splitlines() if any(w.lower() in ln.lower() for w in a.find)]
+        print("  「%s」を含む行: %d 件" % ("・".join(a.find), len(hits)))
+        for ln in hits[:50]:
+            print("   - " + ln[:200])
+        return 3 if hits else 0
+    print(text[:3000])
+    return 0
+
+
 def cmd_install_sensor(a: argparse.Namespace) -> int:
     from kekkai import service
     return service.install_sensor()
@@ -461,6 +485,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("mcp", help="MCPサーバー（Claude Code / Claude Desktop 用）").set_defaults(fn=cmd_mcp)
     sub.add_parser("install-agent", help="ログイン時に自動起動（macOS）").set_defaults(fn=cmd_install_agent)
     sub.add_parser("uninstall-agent", help="自動起動を解除").set_defaults(fn=cmd_uninstall_agent)
+    s = sub.add_parser("onion", help=".onion のページを Tor 経由で読む（文字情報のみ）")
+    s.add_argument("url")
+    s.add_argument("--find", nargs="+", help="この語を含む行だけ表示（メールアドレス・社名など）")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_onion)
     sub.add_parser("install-sensor", help="パケットセンサーを常時監視に登録（要 sudo）").set_defaults(fn=cmd_install_sensor)
     sub.add_parser("uninstall-sensor", help="パケットセンサーの常時監視を解除（要 sudo）").set_defaults(fn=cmd_uninstall_sensor)
     return p

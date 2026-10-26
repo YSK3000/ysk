@@ -38,6 +38,15 @@ class Finding:
     data: Dict[str, Any] = field(default_factory=dict)
 
 
+TOR_PATHS = ("/opt/homebrew/bin/tor", "/opt/homebrew/Cellar/tor/", "/usr/local/bin/tor", "/usr/local/Cellar/tor/",
+             "/Applications/Tor Browser.app/")
+
+
+def own_tor(c: Dict[str, Any]) -> bool:
+    path = c.get("path") or ""
+    return (c.get("process") or "") in ("tor", "firefox", "Tor Browser") and path.startswith(TOR_PATHS)
+
+
 def suspicious_path(path: Optional[str]) -> bool:
     if not path:
         return False
@@ -65,6 +74,8 @@ def connection_findings(conns: List[Dict[str, Any]], suspicious_ports: Set[int],
         for t in threats:
             if t["kind"] == "tor-exit":
                 sev = "medium" if inbound else "low"
+                if not inbound and own_tor(c):
+                    sev = "info"  # the user's own tor / Tor Browser; kept as a record, since its path is user-writable
                 out.append(Finding(
                     "conn.tor", sev, "Tor出口ノードとの通信" + ("（外部からの接続）" if inbound else ""),
                     "%s が %s:%s（%s）と通信しています。" % (who, raddr, c.get("rport"), where),
