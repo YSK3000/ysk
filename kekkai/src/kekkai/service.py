@@ -136,15 +136,30 @@ def uninstall_sensor() -> int:
     for p in (SENSOR_PLIST, SENSOR_PLIST + ".new"):
         if os.path.exists(p):
             os.unlink(p)
-    d = state_dir()  # remove only what the sensor itself created
+    clean_state_dir(state_dir())
+    print("  パケットセンサーの常時監視を解除しました")
+    return 0
+
+
+def clean_state_dir(d: Path) -> None:
+    """Remove only what the sensor itself created, then the directory if it is empty."""
     if (d / "code" / "DIGEST").exists():
         shutil.rmtree(str(d / "code"), ignore_errors=True)
-    for name in ("events.jsonl", "heartbeat", "domains-tif-mini.txt"):
-        if (d / name).exists():
-            (d / name).unlink()
+    # Remove every plain file the sensor left here (events.jsonl[.1], heartbeat,
+    # domains-tif-mini.txt, btm.json, ...). Scan instead of a fixed list so new
+    # state files are not left behind; don't follow symlinks or recurse into
+    # unexpected subdirectories, leave those for the user to see.
+    try:
+        with os.scandir(str(d)) as it:
+            for entry in it:
+                if entry.is_file(follow_symlinks=False):
+                    try:
+                        os.unlink(entry.path)
+                    except OSError:
+                        pass
+    except OSError:
+        pass
     try:
         d.rmdir()
     except OSError:
         pass
-    print("  パケットセンサーの常時監視を解除しました")
-    return 0

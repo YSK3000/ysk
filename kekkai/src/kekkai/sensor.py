@@ -290,12 +290,11 @@ def dump_btm(plat: Any) -> None:
     """Snapshot login/background items (needs root; sfltool returns nothing otherwise) for the dashboard."""
     try:
         items = plat.background_items()
-    except Exception as e:  # noqa: BLE001
+        if items:
+            atomic_write(str(state_dir() / "btm.json"),
+                         json.dumps({"ts": time.time(), "items": items}, ensure_ascii=False).encode(), 0o644)
+    except Exception as e:  # noqa: BLE001  keep the keeper thread alive on any collect/serialize/write error
         log.debug("btm dump failed: %s", e)
-        return
-    if items:
-        atomic_write(str(state_dir() / "btm.json"),
-                     json.dumps({"ts": time.time(), "items": items}, ensure_ascii=False).encode(), 0o644)
 
 
 def _keeper(stop: threading.Event, beat: Any, state: Dict[str, Any], plat: Any, want: Optional[str]) -> None:

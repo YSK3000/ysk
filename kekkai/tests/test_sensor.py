@@ -182,6 +182,33 @@ class StateDirTest(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     sensor.prepare_state_dir()
 
+    def test_clean_state_dir_removes_every_sensor_file(self):
+        from kekkai import service
+        with tempfile.TemporaryDirectory() as parent:
+            d = os.path.join(parent, "KEKKAI Sensor")
+            os.makedirs(os.path.join(d, "code"))
+            with open(os.path.join(d, "code", "DIGEST"), "w") as f:
+                f.write("deadbeef\n")
+            # Every file the sensor writes, including btm.json and the rotated spool,
+            # must go so the directory can be removed on uninstall.
+            for name in ("events.jsonl", "events.jsonl.1", "heartbeat",
+                         "domains-tif-mini.txt", "btm.json"):
+                with open(os.path.join(d, name), "w") as f:
+                    f.write("x")
+            service.clean_state_dir(sensor.Path(d))
+            self.assertFalse(os.path.exists(d), "uninstall left the state directory behind")
+
+    def test_clean_state_dir_keeps_unexpected_subdir(self):
+        from kekkai import service
+        with tempfile.TemporaryDirectory() as parent:
+            d = os.path.join(parent, "KEKKAI Sensor")
+            os.makedirs(os.path.join(d, "mystery"))  # not ours: don't recurse into it
+            with open(os.path.join(d, "heartbeat"), "w") as f:
+                f.write("x")
+            service.clean_state_dir(sensor.Path(d))
+            self.assertTrue(os.path.isdir(os.path.join(d, "mystery")))
+            self.assertFalse(os.path.exists(os.path.join(d, "heartbeat")))
+
 
 class FakeTcpdump:
     """A stand-in tcpdump script so run() can be tested end to end without root."""
