@@ -14,8 +14,13 @@ fail() {
 alive() { $PY -c "import sys; sys.path.insert(0, 'src'); from kekkai import server; sys.exit(0 if server.session_alive() else 1)"; }
 
 # ---- 1) 自動起動（LaunchAgent）
+$PY -c "import socket, time; t = time.time(); socket.getfqdn('127.0.0.1'); print('probe: getfqdn(127.0.0.1) took %.1fs' % (time.time() - t))"
+T0=$(date +%s)
 ./kekkai install-agent || fail "install-agent"
 for _ in $(seq 60); do alive && break; sleep 0.5; done
+T1=$(date +%s)
+echo "dashboard up $((T1 - T0))s after install-agent"
+[ $((T1 - T0)) -le 15 ] || fail "dashboard took $((T1 - T0))s to start after login (limit 15s)"
 $PY - <<'PY' || fail "auto-started dashboard did not answer"
 import json, sys, urllib.request
 sys.path.insert(0, "src")

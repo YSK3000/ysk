@@ -121,7 +121,7 @@ def cmd_setup(a: argparse.Namespace) -> int:
     if cmd_install_agent(a) != 0:
         return 1
     from kekkai import server, service
-    for _ in range(40):
+    for _ in range(120):
         if server.session_alive():
             break
         time.sleep(0.5)

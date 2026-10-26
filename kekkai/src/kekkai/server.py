@@ -14,6 +14,7 @@ import os
 import queue
 import secrets
 import socket
+import socketserver
 import sys
 import threading
 import time
@@ -72,6 +73,12 @@ class Server(ThreadingHTTPServer):
     def __init__(self, addr: Tuple[str, int], app: "App"):
         self.app = app
         super().__init__(addr, Handler)
+
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind() resolves socket.getfqdn(host) only for a display name; that reverse lookup
+        # can stall for tens of seconds on macOS, delaying the dashboard after login.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[0], self.server_address[1]
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         exc = sys.exc_info()[1]
