@@ -21,6 +21,7 @@ from kekkai.intel.exposure import assess, internetdb, public_ip
 from kekkai.intel.feeds import SEV_RANK, FeedSet
 from kekkai.intel.geo import Geo
 from kekkai.intel.oui import OUI
+from kekkai.intel.vulns import VulnDB
 from kekkai.netutil import is_local_target, is_public, neighbor_overlap
 from kekkai.notify import Notifier
 from kekkai.platforms import get_platform
@@ -73,6 +74,7 @@ class Monitor:
         self.geo = Geo()
         self.feeds = FeedSet()
         self.oui = OUI()
+        self.vulns = VulnDB()
         self.notifier = Notifier(cfg, self.platform)
         self.bus = EventBus()
         self.lock = threading.RLock()
@@ -368,6 +370,11 @@ class Monitor:
                 row, is_new = self.store.upsert_device(net_id, d["mac"], d["ip"], **fields)
                 if is_new and baselined and net.get("trusted") and d["kind"] != "this":
                     findings.append(rules.new_device_finding(d))
+                if d["kind"] != "this":
+                    up = d.get("upnp") or {}
+                    hits = self.vulns.device_hits(up.get("manufacturer") or d.get("vendor"),
+                                                  [d.get("model"), up.get("modelName"), up.get("modelNumber")])
+                    findings += rules.device_vuln_findings(d, hits)
             if not baselined:
                 self.store.kv_set(bkey, True)
                 self.store.log_event("lan", "ベースライン学習: %d台の機器を登録" % len(res["devices"]))
@@ -430,6 +437,11 @@ class Monitor:
             snap = {"dns": self.state.get("dns"), "proxies": self.state.get("proxies"), "wifi": wifi,
                     "listeners": self.state.get("listeners"), "persistence": persistence}
         audit = self._audit(snap, slow=slow)
+        mac = self.vulns.macos(self._safe("os_version", self.platform.os_version, None))
+        vf = rules.macos_vuln_findings(mac)
+        findings += vf
+        if mac and not mac.get("unknown_line"):
+            audit = self._with_vuln_check(audit, mac, vf)
         if wifi and wifi.get("ssid") and net_id:
             self.store.touch_network(net_id, (self.state.get("network") or {}).get("gateway"),
                                      (self.state.get("network") or {}).get("subnet"), str(wifi.get("ssid")))
@@ -439,6 +451,21 @@ class Monitor:
         self._health("posture", True, time.time() - t0)
         self.bus.publish("posture", {"score": audit.get("score")})
         return audit
+
+    @staticmethod
+    def _with_vuln_check(audit: Dict[str, Any], mac: Dict[str, Any], vf: List[Finding]) -> Dict[str, Any]:
+        """Show the version-based vulnerability result in the posture audit too, and re-score."""
+        from kekkai.audit import check, score
+        if vf:
+            status = "fail" if vf[0].severity == "high" else "warn"
+            detail, fix = vf[0].title, vf[0].advice
+        else:
+            status, detail, fix = "pass", "macOS %s に既知の未修正脆弱性はありません（%s の最新）" % (mac["version"], mac["line"]), ""
+        checks = [c for c in audit.get("checks") or [] if c.get("id") != "macos_vulns"]
+        checks.append(check("macos_vulns", "既知の脆弱性（macOS）", status, detail, fix, "update", 10))
+        out = dict(audit, checks=checks)
+        out.update(score(checks))
+        return out
 
     def exposure_cycle(self) -> Dict[str, Any]:
         t0 = time.time()
@@ -471,6 +498,8 @@ class Monitor:
                     findings.append(Finding("exposure.internetdb", f["severity"], f["title"], f["detail"],
                                             "ルーターのポート開放・UPnP・公開サーバー設定を見直してください。Shodanのデータは週1回更新です。",
                                             subject="%s:%s" % (pub, f.get("port", f["title"])), data=f))
+        if not res.get("shared_ipv4"):
+            findings += rules.exposure_kev_findings(pub, self.vulns.kev_for(((res.get("internetdb") or {}).get("vulns")) or []))
         net_id = (self.state.get("network") or {}).get("id")
         self.raise_findings(findings, net_id)
         with self.lock:
@@ -486,6 +515,8 @@ class Monitor:
         report["geo_city"] = updater.update_geo("city", force=force)
         report["geo_asn"] = updater.update_geo("asn", force=force)
         report["oui"] = updater.update_oui(force=force)
+        from kekkai.intel import vulns as vulnmod
+        report["vulns"] = vulnmod.update(force=force)
         self._intel_cache.clear()
         self.store.log_event("intel", "脅威情報を更新しました", report)
         self._health("intel", True, time.time() - t0)

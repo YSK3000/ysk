@@ -345,6 +345,69 @@ def sensor_conn_finding(ev: Dict[str, Any], threats: List[Dict[str, Any]], geo: 
                    subject=str(ev.get("dst")), data=ev)
 
 
+UPDATE_ADVICE = "システム設定 > 一般 > ソフトウェアアップデート から今すぐ更新してください（自動アップデートもオンに）。"
+
+
+def macos_vuln_findings(st: Optional[Dict[str, Any]], stale_days: int = 400) -> List[Finding]:
+    """Unpatched, publicly known macOS vulnerabilities for this exact version (SOFA + CISA KEV)."""
+    if not st or st.get("unknown_line"):
+        return []
+    days = st.get("days_since_security_release")
+    if days is not None and days > stale_days and st.get("newer_major"):
+        return [Finding("host.macos_unsupported", "high", "このmacOS（%s）はセキュリティ更新が止まっている可能性" % st["line"],
+                        "%s %s には %d 日間セキュリティ更新が出ていません。Appleは新しい脆弱性を古いmacOSでは直さないことがあります。"
+                        "（出典: Apple のセキュリティアップデート情報 https://support.apple.com/ja-jp/100100 、SOFA）" % (
+                            st["line"], st["version"], days),
+                        "対応する新しいmacOSへアップグレードしてください（Macが対応していなければ、買い替えも検討）。",
+                        subject="macos-%s" % st["line"], data=st)]
+    if not st.get("cves"):
+        return []
+    exploited = st.get("exploited") or []
+    detail = "macOS %s → 最新 %s。未修正の既知の脆弱性 %d 件（%s で修正済み）。" % (
+        st["version"], st.get("latest"), st["cves"], "、".join(st.get("missing_releases") or []))
+    if exploited:
+        detail += "うち %d 件は実際の攻撃で悪用が確認されています: %s。" % (len(exploited), ", ".join(exploited[:8]))
+    detail += "（出典: Apple のセキュリティアップデート情報 https://support.apple.com/ja-jp/100100 、CISA KEV、SOFA）"
+    return [Finding("host.macos_vulns", "high" if exploited else "medium",
+                    "macOSに未修正の脆弱性: %d 件%s" % (st["cves"], "（うち悪用確認 %d 件）" % len(exploited) if exploited else ""),
+                    detail, UPDATE_ADVICE, subject="macos-%s" % st["version"], data=st)]
+
+
+def kev_label(k: Dict[str, Any]) -> str:
+    return "%s（%s）" % (k["cveID"], k.get("vulnerabilityName") or k.get("product") or "")
+
+
+def device_vuln_findings(dev: Dict[str, Any], hits: Dict[str, List[Dict[str, Any]]]) -> List[Finding]:
+    name = dev.get("hostname") or dev.get("model") or dev.get("vendor") or dev.get("ip")
+    if hits.get("model"):
+        ks = hits["model"]
+        return [Finding("lan.kev_model", "high", "機器の型番に、悪用が確認された脆弱性: %s" % name,
+                        "%s（%s / %s）の型番が、CISA KEV（実際の攻撃で悪用された脆弱性の一覧）の対象製品と一致しました: %s" % (
+                            name, dev.get("vendor") or "?", dev.get("ip"), "、".join(kev_label(k) for k in ks[:5])),
+                        "1) メーカーサイトで最新ファームウェアを確認して更新 2) 更新が終了した機種なら買い替え "
+                        "3) それまでは外部公開（ポート開放・UPnP）をやめる。型番の表記違いによる誤一致もあり得ます。",
+                        subject="%s|kev-model" % dev.get("mac"), data={"cves": [k["cveID"] for k in ks], "ip": dev.get("ip")})]
+    if hits.get("vendor"):
+        ks = hits["vendor"]
+        return [Finding("lan.kev_vendor", "low", "メーカー製品に悪用確認済みの脆弱性あり（型番は要確認）: %s" % name,
+                        "%s 製品には CISA KEV 掲載の脆弱性が %d 件あります（例: %s）。この機器の型番が該当するかは確認できていません。" % (
+                            dev.get("vendor"), len(ks), "、".join(kev_label(k) for k in ks[:3])),
+                        "機器の型番とファームウェアのバージョンを確認し、メーカーの最新版に更新してください。",
+                        subject="%s|kev-vendor" % dev.get("mac"), data={"cves": [k["cveID"] for k in ks][:50], "ip": dev.get("ip")})]
+    return []
+
+
+def exposure_kev_findings(public_ip: Optional[str], kev_hits: List[Dict[str, Any]]) -> List[Finding]:
+    if not kev_hits:
+        return []
+    return [Finding("exposure.kev", "high", "インターネットから見える自宅の機器に、悪用確認済みの脆弱性",
+                    "公開IP %s について Shodan が関連付けたCVEのうち、%d 件が CISA KEV（実際の攻撃で悪用）に掲載: %s。"
+                    "Shodanはバナー等からの推定なので、機器の特定と確認が必要です。" % (
+                        public_ip, len(kev_hits), "、".join(kev_label(k) for k in kev_hits[:5])),
+                    "1) ルーターや公開している機器のファームウェアを更新 2) 不要なポート開放・UPnPをやめる 3) 「外部公開」画面で確認。",
+                    subject="%s|kev" % public_ip, data={"cves": [k["cveID"] for k in kev_hits]})]
+
+
 def threat_level(counts: Dict[str, int]) -> Tuple[int, str]:
     if counts.get("critical"):
         return 5, "CRITICAL"

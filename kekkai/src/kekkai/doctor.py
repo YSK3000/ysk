@@ -106,6 +106,11 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
         else:
             age = (time.time() - (av.get(key + "_build") or 0)) / 86400
             out.append(_c(label, "ok" if age < 70 else "warn", "ビルド %.0f日前" % age, "" if age < 70 else "./kekkai update で更新"))
+    from kekkai.intel.vulns import VulnDB
+    vs = (monitor.vulns if monitor else VulnDB()).status()
+    out.append(_c("脆弱性DB", "ok" if vs["kev_entries"] > 500 and vs["sofa_lines"] else "warn",
+                  "CISA KEV %d 件（%s版）/ macOS更新情報 %d 系列" % (vs["kev_entries"], vs["kev_version"] or "-", vs["sofa_lines"]),
+                  "" if vs["kev_entries"] > 500 else "./kekkai update を実行"))
     o = monitor.oui if monitor else OUI()
     out.append(_c("MACベンダーDB", "ok" if o.size > 10000 else "warn", "%d 件" % o.size, "" if o.size else "./kekkai update を実行"))
     fs = monitor.feeds if monitor else FeedSet()

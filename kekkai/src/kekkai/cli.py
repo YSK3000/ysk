@@ -110,6 +110,8 @@ def cmd_setup(a: argparse.Namespace) -> int:
         print("  [1/4] GeoIP (都市) …", updater.update_geo("city", force=a.force, progress=lambda s: None))
         print("  [2/4] GeoIP (ASN)  …", updater.update_geo("asn", force=a.force))
         print("  [3/4] MACベンダー  …", updater.update_oui(force=a.force))
+        from kekkai.intel import vulns
+        print("  [+]   脆弱性DB     …", ", ".join("%s=%s" % kv for kv in vulns.update(force=a.force).items()))
         rep = FeedSet().update(cfg.get("intel.feeds"), force=True)
         print("  [4/4] 脅威フィード …", ", ".join("%s=%s" % kv for kv in rep.items()))
     print("\n  自己診断:")

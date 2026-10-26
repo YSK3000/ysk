@@ -577,6 +577,12 @@ class MacOSPlatform(Platform):
         rc, out, _ = run(["scutil", "--proxy"], timeout=10)
         return proxy_summary(parse_scutil_proxy(out)) if rc == 0 else {}
 
+    def os_version(self) -> Optional[str]:
+        # sw_vers, not platform.mac_ver(): Pythons built with an old SDK are told "10.16" by the compat shim
+        rc, out, _ = run(["sw_vers", "-productVersion"], timeout=5)
+        v = out.strip()
+        return v if rc == 0 and re.match(r"^\d+(\.\d+)*$", v) else None
+
     def wifi(self) -> Optional[Dict[str, Any]]:
         rc, out, _ = run(["system_profiler", "SPAirPortDataType", "-json"], timeout=40)
         return parse_system_profiler_wifi(out) if rc == 0 else None

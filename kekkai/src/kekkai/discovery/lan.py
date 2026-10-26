@@ -195,7 +195,7 @@ def discover(platform: Any, ctx: LanContext, oui: Any, active: bool = True,
         devices.append({
             "ip": n.ip, "mac": n.mac, "vendor": vendor, "hostname": hostname, "services": services,
             "kind": kind, "model": md.get("model") or up.get("modelName"), "randomized": mac_is_randomized(n.mac or "00"),
-            "upnp": {k: up.get(k) for k in ("friendlyName", "manufacturer", "modelName", "deviceType", "server")} if up else None,
+            "upnp": {k: up.get(k) for k in ("friendlyName", "manufacturer", "modelName", "modelNumber", "deviceType", "server")} if up else None,
         })
     if ctx.ip and ctx.mac:
         devices.append({"ip": ctx.ip, "mac": ctx.mac, "vendor": oui.vendor(ctx.mac) if oui else None,

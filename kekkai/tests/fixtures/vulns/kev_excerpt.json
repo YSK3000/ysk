@@ -1,0 +1,700 @@
+{
+ "title": "CISA Catalog of Known Exploited Vulnerabilities",
+ "catalogVersion": "2026.10.23",
+ "dateReleased": "2026-10-23T19:30:18.9209Z",
+ "count": 1756,
+ "vulnerabilities": [
+  {
+   "cveID": "CVE-2026-86950",
+   "vendorProject": "Apple",
+   "product": "Multiple Products",
+   "vulnerabilityName": "Apple Multiple Products Out-of-Bounds Write Vulnerability",
+   "dateAdded": "2026-09-29",
+   "shortDescription": "Apple iOS, macOS, and iPadOS contain an out-of-bounds write vulnerability in CoreGraphics that may lead to arbitrary code execution.",
+   "requiredAction": "Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA\u2019s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA\u2019s \u201cForensics Triage Requirements\u201d (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.",
+   "dueDate": "2026-10-13",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://support.apple.com/en-us/149226 ; https://support.apple.com/en-us/149228 ; https://support.apple.com/en-us/149229 ; BOD 26-04: https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk ; Forensics Triage Requirements: https://www.cisa.gov/news-events/directives/bod-26-04-implementation-guidance-prioritizing-security-updates-based-risk ; https://nvd.nist.gov/vuln/detail/CVE-2026-86950",
+   "cwes": [
+    "CWE-787"
+   ]
+  },
+  {
+   "cveID": "CVE-2026-84869",
+   "vendorProject": "ConnectWise",
+   "product": "ScreenConnect",
+   "vulnerabilityName": "ConnectWise ScreenConnect Improper Privilege Management and Missing Authorization Vulnerability",
+   "dateAdded": "2026-09-11",
+   "shortDescription": "ConnectWise ScreenConnect contains both an improper privilege management and missing authorization vulnerability that may allow an attacker to transfer and execute files through an active remote session without authorization or host confirmation.",
+   "requiredAction": "Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA\u2019s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA\u2019s \u201cForensics Triage Requirements\u201d (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.",
+   "dueDate": "2026-09-14",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "Yes",
+   "notes": "https://www.connectwise.com/company/trust/security-bulletins/2026-09-08-screenconnect-bulletin ; BOD 26-04: https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk ; Forensics Triage Requirements: https://www.cisa.gov/news-events/directives/bod-26-04-implementation-guidance-prioritizing-security-updates-based-risk ; https://nvd.nist.gov/vuln/detail/CVE-2026-84869",
+   "cwes": [
+    "CWE-269",
+    "CWE-862"
+   ]
+  },
+  {
+   "cveID": "CVE-2026-65400",
+   "vendorProject": "Apple",
+   "product": "macOS",
+   "vulnerabilityName": "Apple macOS Improper Authentication Vulnerability",
+   "dateAdded": "2026-08-18",
+   "shortDescription": "Apple macOS contains an improper authentication vulnerability that could allow an attacker on the network to authenticate to Screen Sharing without valid credentials.",
+   "requiredAction": "Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA\u2019s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA\u2019s \u201cForensics Triage Requirements\u201d (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.",
+   "dueDate": "2026-08-21",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "Yes",
+   "notes": "https://support.apple.com/en-us/148170; https://support.apple.com/en-us/148171; https://support.apple.com/en-us/148172 ; BOD 26-04: https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk ; Forensics Triage Requirements: https://www.cisa.gov/news-events/directives/bod-26-04-implementation-guidance-prioritizing-security-updates-based-risk ; https://nvd.nist.gov/vuln/detail/CVE-2026-65400",
+   "cwes": [
+    "CWE-287"
+   ]
+  },
+  {
+   "cveID": "CVE-2024-1708",
+   "vendorProject": "ConnectWise",
+   "product": "ScreenConnect",
+   "vulnerabilityName": "ConnectWise ScreenConnect Path Traversal Vulnerability",
+   "dateAdded": "2026-04-28",
+   "shortDescription": "ConnectWise ScreenConnect contains a path traversal vulnerability which could allow an attacker to execute remote code or directly impact confidential data and critical systems.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2026-05-12",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://www.connectwise.com/company/trust/security-bulletins/connectwise-screenconnect-23.9.8 ; https://nvd.nist.gov/vuln/detail/CVE-2024-1708",
+   "cwes": [
+    "CWE-22"
+   ]
+  },
+  {
+   "cveID": "CVE-2025-29635",
+   "vendorProject": "D-Link",
+   "product": "DIR-823X",
+   "vulnerabilityName": "D-Link DIR-823X Command Injection Vulnerability",
+   "dateAdded": "2026-04-24",
+   "shortDescription": "D-Link DIR-823X contains a command injection vulnerability that allows an authorized attacker to execute arbitrary commands on remote devices by sending a POST request to /goform/set_prohibiting via the corresponding function. The impacted product could be end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue product utilization.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2026-05-08",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/security/publication.aspx?name=SAP10469 ; https://nvd.nist.gov/vuln/detail/CVE-2025-29635",
+   "cwes": [
+    "CWE-77"
+   ]
+  },
+  {
+   "cveID": "CVE-2022-37055",
+   "vendorProject": "D-Link",
+   "product": "Routers",
+   "vulnerabilityName": "D-Link Routers Buffer Overflow Vulnerability",
+   "dateAdded": "2025-12-08",
+   "shortDescription": "D-Link Routers contains a buffer overflow vulnerability that has a high impact on confidentiality, integrity, and availability. The impacted products could be end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue product utilization.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-12-29",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/security/publication.aspx?name=SAP10308 ; https://nvd.nist.gov/vuln/detail/CVE-2022-37055",
+   "cwes": [
+    "CWE-120"
+   ]
+  },
+  {
+   "cveID": "CVE-2020-25078",
+   "vendorProject": "D-Link",
+   "product": "DCS-2530L and DCS-2670L Devices",
+   "vulnerabilityName": "D-Link DCS-2530L and DCS-2670L Devices Unspecified Vulnerability",
+   "dateAdded": "2025-08-05",
+   "shortDescription": "D-Link DCS-2530L and DCS-2670L devices contains an unspecified vulnerability that could allow for remote administrator password disclosure. The impacted products could be end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue product utilization.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-08-26",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://support.dlink.com/productinfo.aspx?m=DCS-2530L ; https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10180 ; https://nvd.nist.gov/vuln/detail/CVE-2020-25078",
+   "cwes": []
+  },
+  {
+   "cveID": "CVE-2020-25079",
+   "vendorProject": "D-Link",
+   "product": "DCS-2530L and DCS-2670L Devices",
+   "vulnerabilityName": "D-Link DCS-2530L and DCS-2670L Command Injection Vulnerability",
+   "dateAdded": "2025-08-05",
+   "shortDescription": "D-Link DCS-2530L and DCS-2670L devices contains a command injection vulnerability in the cgi-bin/ddns_enc.cgi. The impacted products could be end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue product utilization.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-08-26",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://support.dlink.com/productinfo.aspx?m=DCS-2530L ; https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10180 ; https://nvd.nist.gov/vuln/detail/CVE-2020-25079",
+   "cwes": [
+    "CWE-77"
+   ]
+  },
+  {
+   "cveID": "CVE-2022-40799",
+   "vendorProject": "D-Link",
+   "product": "DNR-322L",
+   "vulnerabilityName": "D-Link DNR-322L Download of Code Without Integrity Check Vulnerability",
+   "dateAdded": "2025-08-05",
+   "shortDescription": "D-Link DNR-322L contains a download of code without integrity check vulnerability that could allow an authenticated attacker to execute OS level commands on the device. The impacted products could be end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue product utilization.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-08-26",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://www.dlink.com/uk/en/products/dnr-322l-cloud-network-video-recorder ; https://nvd.nist.gov/vuln/detail/CVE-2022-40799",
+   "cwes": [
+    "CWE-494"
+   ]
+  },
+  {
+   "cveID": "CVE-2024-0769",
+   "vendorProject": "D-Link",
+   "product": "DIR-859 Router",
+   "vulnerabilityName": " D-Link DIR-859 Router Path Traversal Vulnerability",
+   "dateAdded": "2025-06-25",
+   "shortDescription": "D-Link DIR-859 routers contain a path traversal vulnerability in the file /hedwig.cgi of the component HTTP POST Request Handler. Manipulation of the argument service with the input ../../../../htdocs/webinc/getcfg/DHCPS6.BRIDGE-1.xml allows for the leakage of session data potentially enabling privilege escalation and unauthorized control of the device. This vulnerability affects legacy D-Link products. All associated hardware revisions have reached their end-of-life (EOL) or end-of-service (EOS) life cycle and should be retired and replaced per vendor instructions.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-07-16",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10371 ; https://nvd.nist.gov/vuln/detail/CVE-2024-0769",
+   "cwes": [
+    "CWE-22"
+   ]
+  },
+  {
+   "cveID": "CVE-2025-3935",
+   "vendorProject": "ConnectWise",
+   "product": "ScreenConnect",
+   "vulnerabilityName": "ConnectWise ScreenConnect Improper Authentication Vulnerability",
+   "dateAdded": "2025-06-02",
+   "shortDescription": "ConnectWise ScreenConnect contains an improper authentication vulnerability. This vulnerability could allow a ViewState code injection attack, which could allow remote code execution if machine keys are compromised.",
+   "requiredAction": "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2025-06-23",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://www.connectwise.com/company/trust/security-bulletins/screenconnect-security-patch-2025.4 ;   https://nvd.nist.gov/vuln/detail/CVE-2025-3935",
+   "cwes": [
+    "CWE-287"
+   ]
+  },
+  {
+   "cveID": "CVE-2023-25280",
+   "vendorProject": "D-Link",
+   "product": "DIR-820 Router",
+   "vulnerabilityName": "D-Link DIR-820 Router OS Command Injection Vulnerability",
+   "dateAdded": "2024-09-30",
+   "shortDescription": "D-Link DIR-820 routers contain an OS command injection vulnerability that allows a remote, unauthenticated attacker to escalate privileges to root via a crafted payload with the ping_addr parameter to ping.ccp.",
+   "requiredAction": "The impacted product is end-of-life (EoL) and/or end-of-service (EoS). Users should discontinue utilization of the product.",
+   "dueDate": "2024-10-21",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/security/publication.aspx?name=SAP10358 ; https://nvd.nist.gov/vuln/detail/CVE-2023-25280",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2021-40655",
+   "vendorProject": "D-Link",
+   "product": "DIR-605 Router",
+   "vulnerabilityName": "D-Link DIR-605 Router Information Disclosure Vulnerability",
+   "dateAdded": "2024-05-16",
+   "shortDescription": "D-Link DIR-605 routers contain an information disclosure vulnerability that allows attackers to obtain a username and password by forging a post request to the /getcfg.php page. ",
+   "requiredAction": "This vulnerability affects legacy D-Link products. All associated hardware revisions have reached their end-of-life (EOL) or end-of-service (EOS) life cycle and should be retired and replaced per vendor instructions.",
+   "dueDate": "2024-06-06",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://legacy.us.dlink.com/pages/product.aspx?id=2b09e95d90ff4cb38830ecc04c89cee5; https://nvd.nist.gov/vuln/detail/CVE-2021-40655",
+   "cwes": [
+    "CWE-863"
+   ]
+  },
+  {
+   "cveID": "CVE-2014-100005",
+   "vendorProject": "D-Link",
+   "product": "DIR-600 Router",
+   "vulnerabilityName": "D-Link DIR-600 Router Cross-Site Request Forgery (CSRF) Vulnerability",
+   "dateAdded": "2024-05-16",
+   "shortDescription": "D-Link DIR-600 routers contain a cross-site request forgery (CSRF) vulnerability that allows an attacker to change router configurations by hijacking an existing administrator session.",
+   "requiredAction": "This vulnerability affects legacy D-Link products. All associated hardware revisions have reached their end-of-life (EOL) or end-of-service (EOS) life cycle and should be retired and replaced per vendor instructions.",
+   "dueDate": "2024-06-06",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://legacy.us.dlink.com/pages/product.aspx?id=4587b63118524aec911191cc81605283; https://nvd.nist.gov/vuln/detail/CVE-2014-100005",
+   "cwes": [
+    "CWE-352"
+   ]
+  },
+  {
+   "cveID": "CVE-2024-3273",
+   "vendorProject": "D-Link",
+   "product": "Multiple NAS Devices",
+   "vulnerabilityName": "D-Link Multiple NAS Devices Command Injection Vulnerability",
+   "dateAdded": "2024-04-11",
+   "shortDescription": "D-Link DNS-320L, DNS-325, DNS-327L, and DNS-340L contain a command injection vulnerability. When combined with CVE-2024-3272, this can lead to remote, unauthorized code execution.",
+   "requiredAction": "This vulnerability affects legacy D-Link products. All associated hardware revisions have reached their end-of-life (EOL) or end-of-service (EOS) life cycle and should be retired and replaced per vendor instructions.",
+   "dueDate": "2024-05-02",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/security/publication.aspx?name=SAP10383; https://nvd.nist.gov/vuln/detail/CVE-2024-3273",
+   "cwes": [
+    "CWE-77"
+   ]
+  },
+  {
+   "cveID": "CVE-2024-3272",
+   "vendorProject": "D-Link",
+   "product": "Multiple NAS Devices",
+   "vulnerabilityName": "D-Link Multiple NAS Devices Use of Hard-Coded Credentials Vulnerability",
+   "dateAdded": "2024-04-11",
+   "shortDescription": "D-Link DNS-320L, DNS-325, DNS-327L, and DNS-340L contains a hard-coded credential that allows an attacker to conduct authenticated command injection, leading to remote, unauthorized code execution.",
+   "requiredAction": "This vulnerability affects legacy D-Link products. All associated hardware revisions have reached their end-of-life (EOL) or end-of-service (EOS) life cycle and should be retired and replaced per vendor instructions.",
+   "dueDate": "2024-05-02",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/security/publication.aspx?name=SAP10383; https://nvd.nist.gov/vuln/detail/CVE-2024-3272",
+   "cwes": [
+    "CWE-798"
+   ]
+  },
+  {
+   "cveID": "CVE-2024-1709",
+   "vendorProject": "ConnectWise",
+   "product": "ScreenConnect",
+   "vulnerabilityName": "ConnectWise ScreenConnect Authentication Bypass Vulnerability",
+   "dateAdded": "2024-02-22",
+   "shortDescription": "ConnectWise ScreenConnect contains an authentication bypass vulnerability that allows an attacker with network access to the management interface to create a new, administrator-level account on affected devices.",
+   "requiredAction": "Apply mitigations per vendor instructions or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2024-02-29",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://www.connectwise.com/company/trust/security-bulletins/connectwise-screenconnect-23.9.8; https://nvd.nist.gov/vuln/detail/CVE-2024-1709",
+   "cwes": [
+    "CWE-288"
+   ]
+  },
+  {
+   "cveID": "CVE-2016-20017",
+   "vendorProject": "D-Link",
+   "product": "DSL-2750B Devices",
+   "vulnerabilityName": "D-Link DSL-2750B Devices Command Injection Vulnerability",
+   "dateAdded": "2024-01-08",
+   "shortDescription": "D-Link DSL-2750B devices contain a command injection vulnerability that allows remote, unauthenticated command injection via the login.cgi cli parameter.",
+   "requiredAction": "Apply mitigations per vendor instructions or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2024-01-29",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10088; https://nvd.nist.gov/vuln/detail/CVE-2016-20017",
+   "cwes": [
+    "CWE-77"
+   ]
+  },
+  {
+   "cveID": "CVE-2023-47565",
+   "vendorProject": "QNAP",
+   "product": "VioStor NVR",
+   "vulnerabilityName": "QNAP VioStor NVR OS Command Injection Vulnerability",
+   "dateAdded": "2023-12-21",
+   "shortDescription": "QNAP VioStar NVR contains an OS command injection vulnerability that allows authenticated users to execute commands via a network.",
+   "requiredAction": "Apply mitigations per vendor instructions or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2024-01-11",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://www.qnap.com/en/security-advisory/qsa-23-48 ;  https://nvd.nist.gov/vuln/detail/CVE-2023-47565",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-17621",
+   "vendorProject": "D-Link",
+   "product": "DIR-859 Router",
+   "vulnerabilityName": "D-Link DIR-859 Router Command Execution Vulnerability",
+   "dateAdded": "2023-06-29",
+   "shortDescription": "D-Link DIR-859 router contains a command execution vulnerability in the UPnP endpoint URL, /gena.cgi. Exploitation allows an unauthenticated remote attacker to execute system commands as root by sending a specially crafted HTTP SUBSCRIBE request to the UPnP service when connecting to the local network.",
+   "requiredAction": "Apply updates per vendor instructions or discontinue use of the product if updates are unavailable.",
+   "dueDate": "2023-07-20",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10147; https://nvd.nist.gov/vuln/detail/CVE-2019-17621",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-20500",
+   "vendorProject": "D-Link",
+   "product": "DWL-2600AP Access Point",
+   "vulnerabilityName": "D-Link DWL-2600AP Access Point Command Injection Vulnerability",
+   "dateAdded": "2023-06-29",
+   "shortDescription": "D-Link DWL-2600AP access point contains an authenticated command injection vulnerability via the Save Configuration functionality in the Web interface, using shell metacharacters in the admin.cgi?action=config_save configBackup or downloadServerip parameter.",
+   "requiredAction": "Apply updates per vendor instructions or discontinue use of the product if updates are unavailable.",
+   "dueDate": "2023-07-20",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10113; https://nvd.nist.gov/vuln/detail/CVE-2019-20500",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2022-27593",
+   "vendorProject": "QNAP",
+   "product": "Photo Station",
+   "vulnerabilityName": "QNAP Photo Station Externally Controlled Reference Vulnerability",
+   "dateAdded": "2022-09-08",
+   "shortDescription": "Certain QNAP NAS running Photo Station with internet exposure contain an externally controlled reference to a resource vulnerability which can allow an attacker to modify system files. This vulnerability was observed being utilized in a Deadbolt ransomware campaign.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-09-29",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://www.qnap.com/en/security-advisory/qsa-22-24;  https://nvd.nist.gov/vuln/detail/CVE-2022-27593",
+   "cwes": [
+    "CWE-610"
+   ]
+  },
+  {
+   "cveID": "CVE-2022-26258",
+   "vendorProject": "D-Link",
+   "product": "DIR-820L",
+   "vulnerabilityName": "D-Link DIR-820L Remote Code Execution Vulnerability",
+   "dateAdded": "2022-09-08",
+   "shortDescription": "D-Link DIR-820L contains an unspecified vulnerability in Device Name parameter in /lan.asp which allows for remote code execution.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-09-29",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10295;  https://nvd.nist.gov/vuln/detail/CVE-2022-26258",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2018-6530",
+   "vendorProject": "D-Link",
+   "product": "Multiple Routers",
+   "vulnerabilityName": "D-Link Multiple Routers OS Command Injection Vulnerability",
+   "dateAdded": "2022-09-08",
+   "shortDescription": "Multiple D-Link routers contain an unspecified vulnerability that allows for execution of OS commands.",
+   "requiredAction": "The vendor D-Link published an advisory stating the fix under CVE-2018-20114 properly patches KEV entry CVE-2018-6530. If the device is still supported, apply updates per vendor instructions. If the affected device has since entered its end-of-life, it should be disconnected if still in use.",
+   "dueDate": "2022-09-29",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://supportannouncement.us.dlink.com/announcement/publication.aspx?name=SAP10105; https://nvd.nist.gov/vuln/detail/CVE-2018-6530",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2011-4723",
+   "vendorProject": "D-Link",
+   "product": "DIR-300 Router",
+   "vulnerabilityName": "D-Link DIR-300 Router Cleartext Storage of a Password Vulnerability",
+   "dateAdded": "2022-09-08",
+   "shortDescription": "The D-Link DIR-300 router stores cleartext passwords, which allows context-dependent attackers to obtain sensitive information.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-09-29",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://www.dlink.com/uk/en/support/product/dir-300-wireless-g-router; https://nvd.nist.gov/vuln/detail/CVE-2011-4723",
+   "cwes": [
+    "CWE-310"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-7195",
+   "vendorProject": "QNAP",
+   "product": "Photo Station",
+   "vulnerabilityName": "QNAP Photo Station Path Traversal Vulnerability",
+   "dateAdded": "2022-06-08",
+   "shortDescription": "QNAP devices running Photo Station contain an external control of file name or path vulnerability allowing remote attackers to access or modify system files.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-22",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-7195",
+   "cwes": [
+    "CWE-22"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-7194",
+   "vendorProject": "QNAP",
+   "product": "Photo Station",
+   "vulnerabilityName": "QNAP Photo Station Path Traversal Vulnerability",
+   "dateAdded": "2022-06-08",
+   "shortDescription": "QNAP devices running Photo Station contain an external control of file name or path vulnerability allowing remote attackers to access or modify system files.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-22",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-7194",
+   "cwes": [
+    "CWE-22"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-7193",
+   "vendorProject": "QNAP",
+   "product": "QTS",
+   "vulnerabilityName": "QNAP QTS Improper Input Validation Vulnerability",
+   "dateAdded": "2022-06-08",
+   "shortDescription": "QNAP QTS contains an improper input validation vulnerability allowing remote attackers to inject code on the system.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-22",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-7193",
+   "cwes": [
+    "CWE-20"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-7192",
+   "vendorProject": "QNAP",
+   "product": "Photo Station",
+   "vulnerabilityName": "QNAP Photo Station Improper Access Control Vulnerability",
+   "dateAdded": "2022-06-08",
+   "shortDescription": "QNAP NAS devices running Photo Station contain an improper access control vulnerability allowing remote attackers to gain unauthorized access to the system.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-22",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-7192",
+   "cwes": [
+    "CWE-863"
+   ]
+  },
+  {
+   "cveID": "CVE-2018-19953",
+   "vendorProject": "QNAP",
+   "product": "Network Attached Storage (NAS)",
+   "vulnerabilityName": "QNAP NAS File Station Cross-Site Scripting Vulnerability",
+   "dateAdded": "2022-05-24",
+   "shortDescription": "A cross-site scripting vulnerability affecting QNAP NAS File Station could allow remote attackers to inject malicious code.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-14",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2018-19953",
+   "cwes": [
+    "CWE-79",
+    "CWE-80"
+   ]
+  },
+  {
+   "cveID": "CVE-2018-19949",
+   "vendorProject": "QNAP",
+   "product": "Network Attached Storage (NAS)",
+   "vulnerabilityName": "QNAP NAS File Station Command Injection Vulnerability",
+   "dateAdded": "2022-05-24",
+   "shortDescription": "A command injection vulnerability affecting QNAP NAS File Station could allow remote attackers to run commands.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-14",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2018-19949",
+   "cwes": [
+    "CWE-20",
+    "CWE-77",
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2018-19943",
+   "vendorProject": "QNAP",
+   "product": "Network Attached Storage (NAS)",
+   "vulnerabilityName": "QNAP NAS File Station Cross-Site Scripting Vulnerability",
+   "dateAdded": "2022-05-24",
+   "shortDescription": "A cross-site scripting vulnerability affecting QNAP NAS File Station could allow remote attackers to inject malicious code.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-06-14",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2018-19943",
+   "cwes": [
+    "CWE-79",
+    "CWE-80"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-16057",
+   "vendorProject": "D-Link",
+   "product": "DNS-320 Storage Device",
+   "vulnerabilityName": "D-Link DNS-320 Remote Code Execution Vulnerability",
+   "dateAdded": "2022-04-15",
+   "shortDescription": "The login_mgr.cgi script in D-Link DNS-320 is vulnerable to remote code execution.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-05-06",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-16057",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2020-2509",
+   "vendorProject": "QNAP",
+   "product": "QNAP Network-Attached Storage (NAS)",
+   "vulnerabilityName": "QNAP Network-Attached Storage (NAS) Command Injection Vulnerability",
+   "dateAdded": "2022-04-11",
+   "shortDescription": "QNAP NAS devices contain a command injection vulnerability which could allow attackers to perform remote code execution.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-05-02",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2020-2509",
+   "cwes": [
+    "CWE-77",
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2021-45382",
+   "vendorProject": "D-Link",
+   "product": "Multiple Routers",
+   "vulnerabilityName": "D-Link Multiple Routers Remote Code Execution Vulnerability",
+   "dateAdded": "2022-04-04",
+   "shortDescription": "A remote code execution vulnerability exists in all series H/W revisions routers via the DDNS function in ncc2 binary file.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-04-25",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2021-45382",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2021-28799",
+   "vendorProject": "QNAP",
+   "product": "Network Attached Storage (NAS)",
+   "vulnerabilityName": "QNAP NAS Improper Authorization Vulnerability",
+   "dateAdded": "2022-03-31",
+   "shortDescription": "QNAP NAS running HBS 3 contains an improper authorization vulnerability which can allow remote attackers to log in to a device.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-04-21",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2021-28799",
+   "cwes": [
+    "CWE-285"
+   ]
+  },
+  {
+   "cveID": "CVE-2020-9377",
+   "vendorProject": "D-Link",
+   "product": "DIR-610 Devices",
+   "vulnerabilityName": "D-Link DIR-610 Devices Remote Command Execution",
+   "dateAdded": "2022-03-25",
+   "shortDescription": "D-Link DIR-610 devices allow remote code execution via the cmd parameter to command.php.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-04-15",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2020-9377",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2019-16920",
+   "vendorProject": "D-Link",
+   "product": "Multiple Routers",
+   "vulnerabilityName": "D-Link Multiple Routers Command Injection Vulnerability",
+   "dateAdded": "2022-03-25",
+   "shortDescription": "Multiple D-Link routers contain a command injection vulnerability which can allow attackers to achieve full system compromise.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-04-15",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2019-16920",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2016-11021",
+   "vendorProject": "D-Link",
+   "product": "DCS-930L Devices",
+   "vulnerabilityName": "D-Link DCS-930L Devices OS Command Injection Vulnerability",
+   "dateAdded": "2022-03-25",
+   "shortDescription": "setSystemCommand on D-Link DCS-930L devices allows a remote attacker to execute code via an OS command.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-04-15",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2016-11021",
+   "cwes": [
+    "CWE-78"
+   ]
+  },
+  {
+   "cveID": "CVE-2013-5223",
+   "vendorProject": "D-Link",
+   "product": "DSL-2760U",
+   "vulnerabilityName": "D-Link DSL-2760U Gateway Cross-Site Scripting Vulnerability",
+   "dateAdded": "2022-03-25",
+   "shortDescription": "A cross-site scripting (XSS) vulnerability exists in the D-Link DSL-2760U gateway, allowing remote authenticated users to inject arbitrary web script or HTML.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-04-15",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2013-5223",
+   "cwes": [
+    "CWE-79"
+   ]
+  },
+  {
+   "cveID": "CVE-2015-2051",
+   "vendorProject": "D-Link",
+   "product": "DIR-645 Router",
+   "vulnerabilityName": "D-Link DIR-645 Router Remote Code Execution Vulnerability",
+   "dateAdded": "2022-02-10",
+   "shortDescription": "D-Link DIR-645 Wired/Wireless Router allows remote attackers to execute arbitrary commands via a GetDeviceSettings action to the HNAP interface.",
+   "requiredAction": "The impacted product is end-of-life and should be disconnected if still in use.",
+   "dueDate": "2022-08-10",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2015-2051",
+   "cwes": [
+    "CWE-77"
+   ]
+  },
+  {
+   "cveID": "CVE-2020-29557",
+   "vendorProject": "D-Link",
+   "product": "DIR-825 R1 Devices",
+   "vulnerabilityName": "D-Link DIR-825 R1 Devices Buffer Overflow Vulnerability",
+   "dateAdded": "2021-11-03",
+   "shortDescription": "D-Link DIR-825 R1 devices contain a buffer overflow vulnerability in the web interface that may allow for remote code execution.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-05-03",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2020-29557",
+   "cwes": [
+    "CWE-119"
+   ]
+  },
+  {
+   "cveID": "CVE-2020-25506",
+   "vendorProject": "D-Link",
+   "product": "DNS-320 Device",
+   "vulnerabilityName": "D-Link DNS-320 Device Command Injection Vulnerability",
+   "dateAdded": "2021-11-03",
+   "shortDescription": "D-Link DNS-320 device contains a command injection vulnerability in the sytem_mgr.cgi component that may allow for remote code execution.",
+   "requiredAction": "Apply updates per vendor instructions.",
+   "dueDate": "2022-05-03",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2020-25506",
+   "cwes": [
+    "CWE-78"
+   ]
+  }
+ ]
+}

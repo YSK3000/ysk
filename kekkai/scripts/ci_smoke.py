@@ -142,6 +142,15 @@ def intel():
     check("geo lookup", g.lookup("8.8.8.8").get("org", "").startswith("Google"))
     print("  oui Apple?", OUI().vendor("3c:22:fb:00:00:01"))
     check("oui lookup", (OUI().vendor("3c:22:fb:00:00:01") or "").startswith("Apple"))
+    from kekkai.intel import vulns
+    from kekkai.platforms import get_platform
+    rep = vulns.update(force=True)
+    print("  vulns:", rep)
+    check("vuln data (CISA KEV + SOFA) from official sources", all(v == "ok" for v in rep.values()), str(rep))
+    ver = get_platform().os_version()
+    st = vulns.VulnDB().macos(ver)
+    print("  this Mac:", ver, "->", {k: st.get(k) for k in ("line", "latest", "cves", "exploited")} if st else st)
+    check("macOS version matched to a SOFA line", bool(st and st.get("line")), str(ver))
 
 
 def exposure_and_lan():

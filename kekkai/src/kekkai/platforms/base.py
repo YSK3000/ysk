@@ -129,6 +129,9 @@ class Platform:
     def wifi(self) -> Optional[Dict[str, Any]]:
         return None
 
+    def os_version(self) -> Optional[str]:
+        return None
+
     def persistence_items(self) -> List[Dict[str, Any]]:
         return []
 
