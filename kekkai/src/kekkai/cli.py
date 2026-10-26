@@ -443,6 +443,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     a = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)  # launchd log file / pipes: show output as it happens
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.WARNING, stream=sys.stderr,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if not getattr(a, "fn", None):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from typing import Optional, Union
+from typing import Iterable, Optional, Union
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
@@ -123,3 +123,11 @@ def network_of(addr: str, prefixlen: int) -> Optional[ipaddress.IPv4Network]:
         return ipaddress.ip_network("%s/%d" % (addr, prefixlen), strict=False)
     except ValueError:
         return None
+
+
+def neighbor_overlap(a: Iterable[str], b: Iterable[str]) -> float:
+    """Share of known LAN devices seen again: high = same network even if the router MAC changed."""
+    sa, sb = set(a), set(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / float(min(len(sa), len(sb)))

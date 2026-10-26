@@ -34,7 +34,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m unittest discover -s tests -v
+      - name: unit tests
+        env:
+          KEKKAI_REQUIRE_TCPDUMP: ${{ runner.os == 'macOS' && '1' || '' }}
+        run: python -m unittest discover -s tests -v
 
   macos-smoke:
     name: macOS real-machine smoke (Apple python3)
@@ -48,26 +51,11 @@ jobs:
       - name: Apple-bundled Python (what a fresh Mac has)
         run: /usr/bin/python3 --version && /usr/bin/python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
       - name: unit tests on Apple python3
+        env:
+          KEKKAI_REQUIRE_TCPDUMP: "1"
+          KEKKAI_SHOW_TCPDUMP: "1"
         run: /usr/bin/python3 -m unittest discover -s tests
       - name: real collectors, downloads, server, MCP
         run: /usr/bin/python3 scripts/ci_smoke.py
-      - name: packet sensor (sudo tcpdump, 20s)
-        run: |
-          sudo -E env PYTHONPATH=src /usr/bin/python3 -m kekkai sensor --no-domains &
-          SENSOR=$!
-          sleep 4
-          /usr/bin/python3 - <<'PY'
-          import socket
-          for port in range(20, 60):
-              s = socket.socket()
-              s.settimeout(0.2)
-              try:
-                  s.connect(("127.0.0.1", port))
-              except OSError:
-                  pass
-              s.close()
-          PY
-          sleep 14
-          sudo kill $SENSOR || true
-          ls -la "$HOME/Library/Application Support/KEKKAI/sensor" || true
-          cat "$HOME/Library/Application Support/KEKKAI/sensor/events.jsonl" || true
+      - name: packet sensor (sudo tcpdump, live detection, clean shutdown)
+        run: scripts/ci_sensor.sh

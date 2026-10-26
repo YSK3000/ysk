@@ -21,7 +21,7 @@ from kekkai.intel.exposure import assess, internetdb, public_ip
 from kekkai.intel.feeds import SEV_RANK, FeedSet
 from kekkai.intel.geo import Geo
 from kekkai.intel.oui import OUI
-from kekkai.netutil import is_local_target, is_public
+from kekkai.netutil import is_local_target, is_public, neighbor_overlap
 from kekkai.notify import Notifier
 from kekkai.platforms import get_platform
 from kekkai.platforms.base import Connection, LanContext
@@ -59,13 +59,6 @@ class EventBus:
                     q.put_nowait((kind, data))
                 except (queue.Empty, queue.Full):
                     pass
-
-
-def _neighbor_overlap(a: List[str], b: List[str]) -> float:
-    sa, sb = set(a), set(b)
-    if not sa or not sb:
-        return 0.0
-    return len(sa & sb) / float(min(len(sa), len(sb)))
 
 
 class Monitor:
@@ -159,7 +152,7 @@ class Monitor:
         prev = self._prev_net
         net_id = None
         if prev and subnet and prev.get("subnet") == subnet and prev.get("gateway") == ctx.gateway:
-            if prev.get("gateway_mac") == ctx.gateway_mac or _neighbor_overlap(prev.get("macs", []), neighbor_macs) >= 0.5:
+            if prev.get("gateway_mac") == ctx.gateway_mac or neighbor_overlap(prev.get("macs", []), neighbor_macs) >= 0.5:
                 net_id = prev["id"]
         if net_id is None:
             if ctx.gateway_mac:
