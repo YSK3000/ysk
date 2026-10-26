@@ -21,8 +21,8 @@ LOCAL_NETS = tuple(ipaddress.ip_network(n) for n in (
 
 _HEX_ONLY = re.compile(r"^[0-9a-fA-F]{12}$")
 
-# Demo mode only: documentation ranges (RFC 5737) that should behave like internet hosts.
-DEMO_PUBLIC_NETS: tuple = ()
+# Tests only: documentation ranges (RFC 5737) that should behave like internet hosts.
+EXTRA_PUBLIC_NETS: tuple = ()
 
 
 def parse_ip(value: object) -> Optional[IPAddress]:
@@ -60,7 +60,7 @@ def is_local_target(value: object) -> bool:
 
 def is_public(value: object) -> bool:
     ip = parse_ip(value)
-    if ip is not None and DEMO_PUBLIC_NETS and any(ip in n for n in DEMO_PUBLIC_NETS if n.version == ip.version):
+    if ip is not None and EXTRA_PUBLIC_NETS and any(ip in n for n in EXTRA_PUBLIC_NETS if n.version == ip.version):
         return True
     return bool(ip is not None and ip.is_global and not ip.is_multicast)
 

@@ -42,7 +42,6 @@ function shell() {
   UI.net = h("div", { class: "net-chip" });
   UI.threat = h("div", { class: "threat-meter", title: "脅威レベル" });
   UI.clock = h("div", { class: "clock" }, clock());
-  UI.ribbon = h("div", { class: "demo-ribbon", hidden: true }, "DEMO MODE — 表示中のデータは架空のシナリオです");
   const top = h("header", { class: "topbar" },
     h("a", { class: "brand", href: "#command", "aria-label": "KEKKAI 概要へ" }, emblem(34),
       h("div", { class: "brand-text" }, h("div", { class: "brand-title" }, h("span", { class: "kanji" }, "結界"), " KEKKAI"),
@@ -60,15 +59,13 @@ function shell() {
   UI.locked = h("div", { class: "locked-overlay", hidden: true },
     h("div", { class: "panel locked-box" }, icon("lock", "big"), h("h2", null, "セッションが無効です"),
       h("p", null, "ターミナルに表示されたURLを開くか、", h("code", null, "./kekkai open"), " を実行してください。")));
-  add(app, UI.ribbon, top, h("div", { class: "body" }, UI.nav, UI.main), UI.toasts, UI.scrim, UI.drawer, UI.locked);
+  add(app, top, h("div", { class: "body" }, UI.nav, UI.main), UI.toasts, UI.scrim, UI.drawer, UI.locked);
   setInterval(() => { UI.clock.textContent = clock(); }, 1000);
 }
 
 function renderTop() {
   const sm = S.summary;
   if (!sm) return;
-  UI.ribbon.hidden = !sm.demo;
-  document.body.classList.toggle("demo", !!sm.demo);
   const n = sm.network || {};
   clear(UI.net);
   add(UI.net, 

@@ -16,7 +16,7 @@ from unittest import mock
 import _pcap
 from _support import fixture
 
-from kekkai import paths, sensor
+from kekkai import sensor
 from kekkai.platforms.base import LanContext
 from kekkai.util import find_cmd
 
@@ -132,6 +132,23 @@ class NetworkChangeTest(unittest.TestCase):
         self.assertEqual((c["iface"], c["ip"], c["gw"], c["gw_dup"]), ("en7", "10.0.5.2", None, False))
 
 
+class StateDirTest(unittest.TestCase):
+    def test_refuses_symlinked_state_dir(self):  # a planted symlink must not redirect root's writes
+        with tempfile.TemporaryDirectory() as d:
+            os.symlink(d, os.path.join(d, "link"))
+            with mock.patch.dict(os.environ, {"KEKKAI_SENSOR_DIR": os.path.join(d, "link")}):
+                with self.assertRaises(RuntimeError):
+                    sensor.prepare_state_dir()
+
+    def test_default_location_must_be_root_owned(self):
+        env = {k: v for k, v in os.environ.items() if k != "KEKKAI_SENSOR_DIR"}
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(sensor, "state_dir", return_value=sensor.Path(d)):
+            if os.geteuid() != 0:  # a user-owned folder is exactly what must be refused
+                with self.assertRaises(RuntimeError):
+                    sensor.prepare_state_dir()
+
+
 class FakeTcpdump:
     """A stand-in tcpdump script so run() can be tested end to end without root."""
 
@@ -163,7 +180,7 @@ class RunLoopTest(unittest.TestCase):
         self.addCleanup(signal.signal, signal.SIGTERM, self.old_term)
         for name in ("events.jsonl", "heartbeat"):
             with contextlib.suppress(FileNotFoundError):
-                os.unlink(str(paths.sub("sensor", name)))
+                os.unlink(str(sensor.state_dir() / name))
         plat = mock.Mock()
         plat.lan_context.return_value = LanContext(interface="en0", ip=_pcap.OWN_IP, mac=_pcap.OWN_MAC,
                                                    gateway=_pcap.GW_IP, gateway_mac=_pcap.GW_MAC)
@@ -185,7 +202,7 @@ class RunLoopTest(unittest.TestCase):
             f.write(fixture("linux", "tcpdump_attack.txt"))
         fake = FakeTcpdump(self.tmp.name, stdout_file)
         self.use(fake)
-        spool, beat = str(paths.sub("sensor", "events.jsonl")), str(paths.sub("sensor", "heartbeat"))
+        spool, beat = str(sensor.state_dir() / "events.jsonl"), str(sensor.state_dir() / "heartbeat")
 
         def unhandled(signum, frame):
             raise AssertionError("sensor did not install a SIGTERM handler")
@@ -222,6 +239,42 @@ class RunLoopTest(unittest.TestCase):
             rc = sensor.run(None)
         self.assertEqual(rc, 1)
         self.assertIn("permission to capture", err.getvalue())
+
+
+class ServiceTest(unittest.TestCase):
+    def test_daemon_runs_root_owned_copy_in_isolated_mode(self):
+        from kekkai import service
+        with tempfile.TemporaryDirectory() as d:
+            code = sensor.Path(d) / "code"
+            service._copy_code(code)
+            self.assertEqual((code / "DIGEST").read_text().strip(), service.code_digest())
+            self.assertFalse(list(code.rglob("*.html")), "only Python code is copied")
+            pl = service.sensor_plist(sys.executable, code)
+            self.assertEqual(pl["ProgramArguments"][1:3], ["-I", "-B"])
+            self.assertNotIn("EnvironmentVariables", pl)
+            self.assertTrue(pl["KeepAlive"])
+            # the exact boot line launchd runs, asked for --help instead of starting a capture
+            boot = pl["ProgramArguments"][-1].replace("main(['sensor'])", "main(['sensor', '--help'])")
+            env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+            r = subprocess.run([sys.executable, "-I", "-B", "-c", boot + "\n"], capture_output=True, text=True,
+                               cwd="/", env=env, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("--interface", r.stdout)
+            r = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys; sys.path.insert(0, %r); import kekkai.sensor, "
+                                "kekkai.platforms.macos, kekkai.platforms.linux, kekkai.cli; print(kekkai.sensor.__file__)" % str(code)],
+                               capture_output=True, text=True, cwd="/", env=env, timeout=60)
+            self.assertTrue(r.stdout.strip().startswith(str(code)), r.stdout + r.stderr)
+
+    def test_status_reports_running_and_outdated(self):
+        from kekkai import service
+        d = sensor.state_dir()
+        (d / "code").mkdir(parents=True, exist_ok=True)
+        (d / "code" / "DIGEST").write_text("0000000000000000\n")
+        (d / "heartbeat").write_text(str(time.time()))
+        self.addCleanup(lambda: [p.unlink() for p in (d / "heartbeat", d / "code" / "DIGEST") if p.exists()])
+        with mock.patch("os.path.exists", side_effect=lambda p: p == service.SENSOR_PLIST or os.path.lexists(p)):
+            st = service.status()
+        self.assertTrue(st["installed"] and st["running"] and st["outdated"])
 
 
 if __name__ == "__main__":

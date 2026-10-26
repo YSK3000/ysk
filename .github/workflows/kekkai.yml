@@ -57,5 +57,5 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tests
       - name: real collectors, downloads, server, MCP
         run: /usr/bin/python3 scripts/ci_smoke.py
-      - name: packet sensor (sudo tcpdump, live detection, clean shutdown)
-        run: scripts/ci_sensor.sh
+      - name: everyday setup (auto-start agent, always-on sensor daemon, live detection, uninstall)
+        run: scripts/ci_service.sh

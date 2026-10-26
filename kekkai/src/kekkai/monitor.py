@@ -80,8 +80,7 @@ class Monitor:
         self._sensor_offset = 0
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self.started = time.time()
-        self.demo = False
-        # Injection points (demo mode and tests swap these out).
+        # Injection points (tests swap these out).
         self._discover = lanmod.discover
         self._public_ip = public_ip
         self._internetdb = internetdb
@@ -489,8 +488,9 @@ class Monitor:
         return report
 
     def sensor_cycle(self) -> None:
-        spool = str(paths.sub("sensor", "events.jsonl"))
-        beat = str(paths.sub("sensor", "heartbeat"))
+        from kekkai.sensor import state_dir
+        spool = str(state_dir() / "events.jsonl")
+        beat = str(state_dir() / "heartbeat")
         active = os.path.exists(beat) and time.time() - os.path.getmtime(beat) < 30
         with self.lock:
             self.state["sensor"] = {"active": active, "last_beat": os.path.getmtime(beat) if os.path.exists(beat) else None}

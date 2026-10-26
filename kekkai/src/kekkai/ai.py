@@ -158,8 +158,6 @@ def analyze_alert(cfg: Any, alert: Dict[str, Any], monitor: Any = None) -> Dict[
         return {"ok": False, "error": str(e)}
     prompt = build_prompt(alert, monitor)
     if provider is None:
-        if monitor is not None and getattr(monitor, "demo", False):
-            return demo_analysis(alert)
         return {"ok": False, "error": "使えるAIが見つかりません",
                 "hint": "おすすめ: Ollama をインストールして `ollama pull qwen3:8b` → KEKKAIを再読み込み。"
                         "Claudeを使う場合は `python3 -m pip install anthropic` と ANTHROPIC_API_KEY を設定。"}
@@ -230,31 +228,3 @@ def _anthropic(cfg: Any, model: str, prompt: str) -> Dict[str, Any]:
     return {"ok": True, "text": text, "provider": "anthropic", "model": response.model,
             "truncated": response.stop_reason == "max_tokens"}
 
-
-def demo_analysis(alert: Dict[str, Any]) -> Dict[str, Any]:
-    rule = alert.get("rule", "")
-    if rule.startswith("conn."):
-        text = (
-            "## 何が起きたか\n"
-            "このMacの中で「sysmond」という名前のプログラムが、海外のサーバーにポート4444で接続しています。"
-            "接続先はボットネットの指令サーバー（C2）としてリストに載っている住所です。プログラムは /Users/Shared の隠しフォルダにあり、"
-            "Appleの正規プログラムに似せた名前ですが署名がありません。\n"
-            "## 危険度の評価（誤検知の可能性も含めて）\n"
-            "- 危険度は「緊急」です。署名なし・隠しフォルダ・C2リスト掲載・不審なポートの4条件がそろっており、誤検知の可能性は低いと考えられます。\n"
-            "- 同時に自動起動項目（LaunchAgent）も追加されているため、再起動後も動き続ける仕組みが作られた可能性があります（推測）。\n"
-            "## 今すぐやること（番号付きの具体的な手順）\n"
-            "1. Wi-Fiをオフにしてネットから切り離す（コントロールセンター > Wi-Fi）。\n"
-            "2. アクティビティモニタで「sysmond」を選び、強制終了する。\n"
-            "3. ~/Library/LaunchAgents/com.apple.sysmond.plist と /Users/Shared/.sysmond を削除（ゴミ箱を空にする）。\n"
-            "4. 別の安全な端末から、Apple ID・メール・銀行などのパスワードを変更し、2段階認証を確認する。\n"
-            "## 追加で確認すること\n"
-            "- いつ・どこから入ったか（最近インストールしたアプリ、メールの添付ファイル）。\n"
-            "- 同じWi-Fiのカメラ（IPC-360）にもTelnetが開いており、乗っ取りの入口になった可能性があります。初期パスワードの変更とファームウェア更新を。"
-        )
-    else:
-        text = (
-            "## 何が起きたか\n%s\n## 危険度の評価（誤検知の可能性も含めて）\n検知内容とネットワークの状況から総合的に判断してください（デモ用の汎用解説です）。\n"
-            "## 今すぐやること（番号付きの具体的な手順）\n1. 推奨される対応を確認する\n2. 心当たりがなければ機器をネットワークから切り離す\n"
-            "## 追加で確認すること\n- 同じ時刻に他のアラートが出ていないか" % alert.get("detail", "")
-        )
-    return {"ok": True, "text": text, "provider": "demo", "model": "サンプル解説（AI未接続）"}

@@ -54,14 +54,10 @@ def table(rows: List[List[Any]], headers: List[str]) -> None:
         print("  ".join(cell(x, cols[i]) for i, x in enumerate(r)))
 
 
-def monitor(demo: bool = False) -> Any:
+def monitor() -> Any:
     from kekkai import config
-    cfg = config.load()
-    if demo:
-        from kekkai import demo as demomod
-        return demomod.build(cfg)
     from kekkai.monitor import Monitor
-    return Monitor(cfg)
+    return Monitor(config.load())
 
 
 # ---------------------------------------------------------------------- commands
@@ -72,9 +68,7 @@ def cmd_serve(a: argparse.Namespace) -> int:
     raise_fd_limit()
     banner()
     cfg = config.load()
-    if a.demo:
-        print(c("  DEMO MODE: 架空のネットワークとシナリオで動作します（実際の通信は監視しません）", "33"))
-    m = monitor(a.demo)
+    m = monitor()
     m.start()
     port = a.port or int(cfg.get("server.port", 47665))
 
@@ -84,7 +78,7 @@ def cmd_serve(a: argparse.Namespace) -> int:
         print("  データ: %s" % paths.data_dir())
 
     try:
-        server.serve(m, cfg, port=port, demo=a.demo, open_browser=not a.no_browser and cfg.get("server.open_browser", True),
+        server.serve(m, cfg, port=port, open_browser=not a.no_browser and cfg.get("server.open_browser", True),
                      ready=ready)
     except KeyboardInterrupt:
         print("\n  停止しました")
@@ -96,9 +90,9 @@ def cmd_serve(a: argparse.Namespace) -> int:
 def cmd_open(a: argparse.Namespace) -> int:
     from kekkai import server
     from kekkai.platforms import get_platform
-    url = server.session_url()
+    url = server.session_url() if server.session_alive() else None
     if not url:
-        print("ダッシュボードが起動していません: ./kekkai serve")
+        print("ダッシュボードが起動していません: ./kekkai setup（自動起動の登録）または ./kekkai serve")
         return 1
     print(url)
     get_platform().open_url(url)
@@ -120,7 +114,23 @@ def cmd_setup(a: argparse.Namespace) -> int:
         print("  [4/4] 脅威フィード …", ", ".join("%s=%s" % kv for kv in rep.items()))
     print("\n  自己診断:")
     worst = doctor.print_report(doctor.run_checks(cfg, quick=True), COLOR)
-    print("\n  次のステップ:  ./kekkai serve   （ダッシュボードが開きます）")
+    if not IS_MACOS or a.no_agent:
+        print("\n  起動:  ./kekkai serve   （ダッシュボードが開きます）")
+        return 0 if worst < 2 else 1
+    print("\n  自動起動を登録します（ログイン中は常に監視。解除: ./kekkai uninstall-agent）")
+    if cmd_install_agent(a) != 0:
+        return 1
+    from kekkai import server, service
+    for _ in range(40):
+        if server.session_alive():
+            break
+        time.sleep(0.5)
+    if cmd_open(a) != 0:
+        print("  ダッシュボードの起動を確認できません。ログ: ~/Library/Logs/kekkai.log")
+        return 1
+    if not service.status()["installed"]:
+        print("\n  仕上げ（推奨）: sudo ./kekkai install-sensor")
+        print("    ポートスキャン・ARP偽装・危険ドメインへのアクセスを、Macの起動中ずっとリアルタイムで検知します")
     return 0 if worst < 2 else 1
 
 
@@ -323,6 +333,9 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     if not IS_MACOS:
         print("macOS専用です")
         return 2
+    if os.geteuid() == 0:
+        print("sudo なしで実行してください（自動起動はログイン中のユーザーとして動かします）")
+        return 2
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logs = os.path.expanduser("~/Library/Logs")
     os.makedirs(logs, exist_ok=True)
@@ -341,9 +354,8 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         plistlib.dump(plist, f)
-    uid = os.getuid()
-    run(["launchctl", "bootout", "gui/%d/%s" % (uid, AGENT_LABEL)], timeout=10)
-    rc, out, err = run(["launchctl", "bootstrap", "gui/%d" % uid, path], timeout=15)
+    from kekkai import service
+    rc, err = service.bootstrap("gui/%d" % os.getuid(), path, AGENT_LABEL)
     if rc != 0:
         print("  launchctl bootstrap に失敗: %s" % (err.strip() or rc))
         return 1
@@ -351,6 +363,16 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     print("  注意: macOS 15以降、バックグラウンド起動ではLAN探索が「ローカルネットワーク」の許可で止まることがあります。\n"
           "        ./kekkai doctor で確認し、必要なら システム設定 > プライバシーとセキュリティ > ローカルネットワーク で許可してください。")
     return 0
+
+
+def cmd_install_sensor(a: argparse.Namespace) -> int:
+    from kekkai import service
+    return service.install_sensor()
+
+
+def cmd_uninstall_sensor(a: argparse.Namespace) -> int:
+    from kekkai import service
+    return service.uninstall_sensor()
 
 
 def cmd_uninstall_agent(a: argparse.Namespace) -> int:
@@ -381,11 +403,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("serve", help="監視を開始してダッシュボードを開く")
     s.add_argument("--port", type=int)
     s.add_argument("--no-browser", action="store_true")
-    s.add_argument("--demo", action="store_true", help="架空のデータで試す")
     s.set_defaults(fn=cmd_serve)
     sub.add_parser("open", help="起動中のダッシュボードを開く").set_defaults(fn=cmd_open)
-    s = sub.add_parser("setup", help="初回セットアップ（データ取得＋自己診断）")
+    s = sub.add_parser("setup", help="初回セットアップ（データ取得＋自己診断＋自動起動の登録）")
     s.add_argument("--no-download", action="store_true")
+    s.add_argument("--no-agent", action="store_true", help="自動起動を登録しない")
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_setup)
     s = sub.add_parser("update", help="GeoIP・脅威フィードを更新")
@@ -437,6 +459,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("mcp", help="MCPサーバー（Claude Code / Claude Desktop 用）").set_defaults(fn=cmd_mcp)
     sub.add_parser("install-agent", help="ログイン時に自動起動（macOS）").set_defaults(fn=cmd_install_agent)
     sub.add_parser("uninstall-agent", help="自動起動を解除").set_defaults(fn=cmd_uninstall_agent)
+    sub.add_parser("install-sensor", help="パケットセンサーを常時監視に登録（要 sudo）").set_defaults(fn=cmd_install_sensor)
+    sub.add_parser("uninstall-sensor", help="パケットセンサーの常時監視を解除（要 sudo）").set_defaults(fn=cmd_uninstall_sensor)
     return p
 
 

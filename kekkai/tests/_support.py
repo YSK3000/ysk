@@ -7,6 +7,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
 os.environ["KEKKAI_HOME"] = tempfile.mkdtemp(prefix="kekkai-test-")
+os.environ["KEKKAI_SENSOR_DIR"] = tempfile.mkdtemp(prefix="kekkai-test-sensor-")
 os.environ.setdefault("NO_COLOR", "1")
 
 

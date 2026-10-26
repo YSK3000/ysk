@@ -128,6 +128,9 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
     except (ImportError, ValueError, OSError):
         pass
 
+    out.append(_sensor_check())
+    if IS_MACOS:
+        out.append(_agent_check())
     sess = _session_check()
     if sess:
         out.append(sess)
@@ -173,6 +176,26 @@ def _local_network_check(gateway: str) -> Dict[str, Any]:
                   "macOS の「ローカルネットワーク」許可が必要な可能性: システム設定 > プライバシーとセキュリティ > "
                   "ローカルネットワーク で、使っているターミナル/Python をオンに。自動起動(install-agent)時に起きやすいです。")
     return _c("ローカルネットワーク", "info", "ルーターの53/80/443番は応答なし（ルーターの設定によっては正常）")
+
+
+def _sensor_check() -> Dict[str, Any]:
+    from kekkai import service
+    s = service.status()
+    if s["running"]:
+        if s["outdated"]:
+            return _c("パケットセンサー", "warn", "常時監視中（古い版のまま）", "更新を反映: sudo ./kekkai install-sensor")
+        return _c("パケットセンサー", "ok", "監視中（ポートスキャン・ARP偽装・危険ドメインをリアルタイム検知）")
+    if s["installed"]:
+        return _c("パケットセンサー", "warn", "登録済みですが止まっています",
+                  "ログ %s を確認し、sudo ./kekkai install-sensor で登録し直してください" % service.SENSOR_LOG)
+    return _c("パケットセンサー", "info", "未導入（リアルタイム検知は無効）",
+              "sudo ./kekkai install-sensor" if IS_MACOS else "sudo ./kekkai sensor")
+
+
+def _agent_check() -> Dict[str, Any]:
+    if os.path.exists(os.path.expanduser("~/Library/LaunchAgents/com.kekkai.monitor.plist")):
+        return _c("自動起動", "ok", "ログイン時に監視を開始します")
+    return _c("自動起動", "info", "未登録（ターミナルを閉じると監視が止まります）", "./kekkai install-agent")
 
 
 def _session_check() -> Optional[Dict[str, Any]]:

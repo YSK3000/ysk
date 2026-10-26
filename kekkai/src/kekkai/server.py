@@ -13,6 +13,7 @@ import mimetypes
 import os
 import queue
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -82,11 +83,10 @@ class Server(ThreadingHTTPServer):
 class App:
     """Routes. Kept separate from the handler so tests can call it directly."""
 
-    def __init__(self, monitor: Any, cfg: Any, token: str, demo: bool = False):
+    def __init__(self, monitor: Any, cfg: Any, token: str):
         self.m = monitor
         self.cfg = cfg
         self.token = token
-        self.demo = demo
         self.port = 0
         self.web = paths.web_dir()
         self._ai_lock = threading.Lock()
@@ -97,7 +97,6 @@ class App:
         net_id = (m.state.get("network") or {}).get("id")
         if path == "/api/summary":
             s = m.summary()
-            s["demo"] = self.demo
             s["stalls"] = m.check_stalls()
             return s
         if path == "/api/connections":
@@ -447,12 +446,12 @@ class Handler(BaseHTTPRequestHandler):
             self.app.m.bus.unsubscribe(q)
 
 
-def serve(monitor: Any, cfg: Any, host: str = "127.0.0.1", port: int = 47665, demo: bool = False,
+def serve(monitor: Any, cfg: Any, host: str = "127.0.0.1", port: int = 47665,
           open_browser: bool = True, ready: Optional[Callable[[str], None]] = None) -> None:
     if host not in ("127.0.0.1", "localhost", "::1"):
         raise SystemExit("セキュリティのため、ダッシュボードは 127.0.0.1 でのみ公開します")
     token = load_or_create_token()
-    app = App(monitor, cfg, token, demo=demo)
+    app = App(monitor, cfg, token)
     httpd = None
     for p in [port] + list(range(port + 1, port + 20)):
         try:
@@ -473,6 +472,17 @@ def serve(monitor: Any, cfg: Any, host: str = "127.0.0.1", port: int = 47665, de
         httpd.serve_forever(poll_interval=0.5)
     finally:
         httpd.server_close()
+
+
+def session_alive(timeout: float = 1.0) -> bool:
+    """Is a dashboard from session.json actually listening (not a stale file from a stopped one)?"""
+    try:
+        with open(str(paths.sub("session.json")), "r", encoding="utf-8") as f:
+            port = int(json.load(f)["port"])
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except (OSError, ValueError, KeyError):
+        return False
 
 
 def session_url() -> Optional[str]:

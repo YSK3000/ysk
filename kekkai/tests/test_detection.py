@@ -130,15 +130,16 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(self.st.kv_get("x"), {"a": [1, 2]})
 
 
-class DemoScenarioTest(unittest.TestCase):
-    """End-to-end: the scripted incident must be detected, without false positives."""
+class IntrusionScenarioTest(unittest.TestCase):
+    """End-to-end: a scripted intrusion on a fake LAN must be detected, without false positives."""
 
     def tearDown(self):
-        netutil.DEMO_PUBLIC_NETS = ()
+        netutil.EXTRA_PUBLIC_NETS = ()
 
-    def test_demo(self):
-        from kekkai import config, demo
-        m = demo.build(config.load())
+    def test_intrusion_is_detected(self):
+        import _fakenet
+        from kekkai import config
+        m = _fakenet.build(config.load())
         alerts = m.store.alerts(None, limit=200)
         by_rule = {}
         for a in alerts:

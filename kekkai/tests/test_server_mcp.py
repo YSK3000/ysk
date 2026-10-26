@@ -17,11 +17,11 @@ from kekkai.mcp import TOOLS, ToolError
 class DashboardSecurityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from kekkai import demo
+        import _fakenet
         cfg = config.load()
-        cls.monitor = demo.build(cfg)
+        cls.monitor = _fakenet.build(cfg)
         cls.token = "t" * 43
-        cls.app = server.App(cls.monitor, cfg, cls.token, demo=True)
+        cls.app = server.App(cls.monitor, cfg, cls.token)
         cls.httpd = server.Server(("127.0.0.1", 0), cls.app)
         cls.port = cls.httpd.server_address[1]
         cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
@@ -32,7 +32,7 @@ class DashboardSecurityTest(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
         cls.monitor.store.close()
-        netutil.DEMO_PUBLIC_NETS = ()
+        netutil.EXTRA_PUBLIC_NETS = ()
 
     def req(self, method, path, body=None, headers=None, host=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
@@ -54,7 +54,7 @@ class DashboardSecurityTest(unittest.TestCase):
         self.assertEqual(r.status, 401)
         r, body = self.req("GET", "/api/summary", headers=self.auth())
         self.assertEqual(r.status, 200)
-        self.assertTrue(json.loads(body)["demo"])
+        self.assertIn("threat", json.loads(body))
         r, _ = self.req("GET", "/api/summary", headers=self.auth(), host="attacker.example:%d" % self.port)
         self.assertEqual(r.status, 403, "DNS rebinding: foreign Host header must be refused")
         r, _ = self.req("GET", "/api/summary", headers={"Cookie": "kekkai_session=wrong"})

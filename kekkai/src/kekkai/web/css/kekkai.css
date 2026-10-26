@@ -75,7 +75,6 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 650; }
 .noscript { color: var(--amber); text-align: center; }
 
 /* ---------------------------------------------------------------- top bar */
-.demo-ribbon { background: repeating-linear-gradient(135deg, rgba(255, 176, 32, .18) 0 14px, rgba(255, 176, 32, .08) 14px 28px); color: var(--amber); text-align: center; font: 600 11px/24px var(--mono); letter-spacing: .14em; border-bottom: 1px solid rgba(255, 176, 32, .3); }
 .topbar { display: flex; align-items: center; gap: 20px; height: 60px; padding: 0 18px 0 14px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(7, 12, 22, .95), rgba(5, 9, 16, .85)); backdrop-filter: blur(8px); flex: none; }
 .brand { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none !important; }
 .emblem { filter: drop-shadow(0 0 8px rgba(0, 229, 255, .45)); }
@@ -285,7 +284,6 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 
 .grid-geo { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr); gap: var(--gap); height: calc(100vh - 60px - var(--gap) * 2); min-height: 520px; }
 .grid-geo > .panel { min-height: 0; }
-body.demo .grid-geo { height: calc(100vh - 84px - var(--gap) * 2); }
 .map-panel.tall .panel-b { height: 100%; }
 .geo-controls { display: flex; align-items: center; gap: 10px; }
 .list-panel .panel-b { overflow-y: auto; min-height: 0; }

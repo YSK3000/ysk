@@ -4,14 +4,6 @@
 Kali Linux の定番ツール（nmap / netdiscover / arpwatch / tcpdump / Snort / Lynis）の考え方を、
 **守る側**に特化して1つのダッシュボードにまとめました。
 
-![概要: 通信先の世界地図と脅威レベル](docs/command.jpg)
-
-| LANマップ（機器とポートスキャン） | アラートとAI解説 |
-|---|---|
-| ![LANマップ](docs/lan-map.jpg) | ![AI解説](docs/alerts-ai.jpg) |
-
-> スクリーンショットは `./kekkai serve --demo` の**架空のデータ**です（侵入シナリオを再生するデモモード）。
-
 ---
 
 ## できること
@@ -66,14 +58,20 @@ xcode-select --install
 git clone https://github.com/YSK3000/ysk.git
 cd ysk/kekkai
 
-# 3) 初期セットアップ（GeoIP・MACベンダー・脅威リストを取得して自己診断）
+# 3) セットアップ（データ取得 → 自己診断 → ログイン時の自動起動を登録 → ダッシュボードが開く）
 ./kekkai setup
 
-# 4) 起動（ブラウザでダッシュボードが開きます）
-./kekkai serve
+# 4) 常時パケット監視（推奨。ポートスキャン・ARP偽装・危険ドメインをリアルタイム検知）
+sudo ./kekkai install-sensor
 ```
 
-Finder から `KEKKAI.command` をダブルクリックしても起動できます。まず雰囲気を見たいときは `./kekkai serve --demo`。
+これで、ログイン中は監視が、Macの起動中はパケットセンサーが自動で動き続けます。ターミナルは閉じて構いません。
+ダッシュボードは `./kekkai open`（または Finder で `KEKKAI.command` をダブルクリック）で開きます。
+状態の確認は `./kekkai doctor`。解除は `./kekkai uninstall-agent` / `sudo ./kekkai uninstall-sensor`。
+
+KEKKAI を更新（`git pull`）したら `sudo ./kekkai install-sensor` をもう一度実行してください。センサーは安全のため、
+管理者しか書き換えられない場所（`/Library/Application Support/KEKKAI Sensor`）にコピーした版で動きます
+（root で動くプログラムを普段のユーザー権限で書き換えられると、マルウェアに乗っ取られるため）。
 
 ### あると便利なもの（任意）
 
@@ -82,8 +80,6 @@ Finder から `KEKKAI.command` をダブルクリックしても起動できま�
 | nmap | `brew install nmap` | 「詳細スキャン」でサービスのバージョンまで特定 |
 | Ollama + モデル | `brew install ollama` → `ollama serve` → `ollama pull qwen3:8b` など | AI解説をMac内で完結（MacBook Proなら快適） |
 | Claude（クラウド） | `python3 -m pip install anthropic` ＋ `ANTHROPIC_API_KEY` | ローカルLLMが無いときのAI解説（MACアドレス等は伏せて送信） |
-| パケットセンサー | 別ターミナルで `sudo ./kekkai sensor` | ポートスキャン・ARP偽装のリアルタイム検知 |
-| 自動起動 | `./kekkai install-agent` | ログイン時にバックグラウンド起動（`./kekkai open` で表示） |
 
 > **macOS 15 以降の注意**: ターミナルから起動した場合は問題ありませんが、自動起動（install-agent）では
 > 「ローカルネットワーク」の許可でLAN探索が止まることがあります。`./kekkai doctor` が検出するので、
@@ -92,8 +88,10 @@ Finder から `KEKKAI.command` をダブルクリックしても起動できま�
 ### コマンド一覧
 
 ```text
-./kekkai serve [--demo] [--port N]   監視＋ダッシュボード
-./kekkai open                        起動中のダッシュボードを開く
+./kekkai setup                       初回セットアップ（データ取得・自己診断・自動起動の登録）
+./kekkai open                        ダッシュボードを開く
+sudo ./kekkai install-sensor         パケットセンサーを常時監視に登録（更新後も再実行）
+./kekkai serve [--port N]            監視＋ダッシュボードをこのターミナルで動かす（自動起動を使わない場合）
 ./kekkai scan                        LAN内の機器を探索して一覧表示
 ./kekkai conns [--risky]             このMacのインターネット通信
 ./kekkai alerts [--all]              アラート一覧
@@ -104,7 +102,8 @@ Finder から `KEKKAI.command` をダブルクリックしても起動できま�
 ./kekkai report [--out report.md]    Markdownレポート（家族やAIへの相談用）
 ./kekkai update [--force]            GeoIP・脅威リストの更新（自動でも12時間ごと）
 ./kekkai doctor                      自己診断
-sudo ./kekkai sensor                 パケットセンサー
+sudo ./kekkai sensor                 パケットセンサーをこのターミナルで動かす（常時監視を使わない場合）
+./kekkai uninstall-agent / sudo ./kekkai uninstall-sensor   自動起動・常時監視の解除
 ./kekkai mcp                         MCPサーバー（Claude 連携）
 ```
 
@@ -175,7 +174,8 @@ MCPツール: `kekkai_status` `kekkai_alerts` `kekkai_connections` `kekkai_devic
   `cd kekkai && python3 -m unittest discover -s tests`
 - GitHub Actions で **本物のmacOS** 上の動作を毎回検証（`.github/workflows/kekkai.yml`）。
   macOSの実コマンド出力とパーサーの結果を突き合わせ、実データのダウンロード・サーバー・MCP・センサーまで確認します
-- デモモード（`--demo`）は本物の検知エンジンに侵入シナリオを流す統合テストも兼ねています
+- パケットセンサーは、攻撃を再現したパケットを本物の tcpdump に通して検知を確認し、実機のMacでも
+  ライブ検知・停止処理・tcpdump の後片付けまで確認します
 
 ## できないこと（正直な制限）
 

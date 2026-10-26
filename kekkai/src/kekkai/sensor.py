@@ -3,7 +3,9 @@
 Reads only packet headers and DNS question names (snaplen 256) and detects:
   * port scans against this Mac      * ARP sweeps (LAN reconnaissance, e.g. netdiscover/arp-scan)
   * ARP replies impersonating the router (MITM)      * DNS lookups of known malicious domains
-Events are appended to <data>/sensor/events.jsonl, which the dashboard ingests.
+Events are appended to <state>/events.jsonl, which the dashboard ingests. <state> is a root-owned directory
+(see state_dir): root never writes into folders the normal user controls, where a planted symlink could make
+it create or chown arbitrary files.
 """
 from __future__ import annotations
 
@@ -12,13 +14,14 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
-from kekkai import paths
 from kekkai.netutil import neighbor_overlap, normalize_mac
 from kekkai.util import FetchError, atomic_write, find_cmd, http_get, log
 
@@ -113,15 +116,33 @@ def domain_match(name: str, domains: Set[str]) -> Optional[str]:
     return None
 
 
-def load_domains(force: bool = False) -> Set[str]:
-    path = str(paths.sub("feeds", "domains-tif-mini.txt"))
+def state_dir() -> Path:
+    env = os.environ.get("KEKKAI_SENSOR_DIR")
+    if env:
+        return Path(env)
+    return Path("/Library/Application Support/KEKKAI Sensor" if sys.platform == "darwin" else "/var/lib/kekkai-sensor")
+
+
+def prepare_state_dir() -> Path:
+    """Create the state directory and refuse one an unprivileged user could have tampered with."""
+    d = state_dir()
+    os.makedirs(str(d), mode=0o755, exist_ok=True)
+    st = os.lstat(str(d))
+    if not stat.S_ISDIR(st.st_mode):
+        raise RuntimeError("%s がディレクトリではありません（シンボリックリンク等）" % d)
+    if not os.environ.get("KEKKAI_SENSOR_DIR") and (st.st_uid != 0 or st.st_mode & 0o022):
+        raise RuntimeError("%s は root 所有で、他のユーザーが書き込めない必要があります" % d)
+    return d
+
+
+def load_domains(force: bool = False, download: bool = True) -> Set[str]:
+    path = str(state_dir() / "domains-tif-mini.txt")
     fresh = os.path.exists(path) and time.time() - os.path.getmtime(path) < 86400
-    if force or not fresh:
+    if download and (force or not fresh):
         try:
             status, _, body = http_get(DOMAIN_FEED_URL, timeout=60, max_bytes=32 * 1024 * 1024)
             if status == 200 and body.count(b"\n") > 1000:
                 atomic_write(path, body, 0o644)
-                paths.chown_to_invoker(paths.sub("feeds", "domains-tif-mini.txt"))
         except FetchError as e:
             log.warning("domain feed download failed: %s", e)
     out: Set[str] = set()
@@ -232,7 +253,6 @@ def _beat(path: Any) -> None:
     try:
         with open(str(path), "w") as b:
             b.write(str(time.time()))
-        paths.chown_to_invoker(path)
     except OSError:
         pass
 
@@ -270,6 +290,19 @@ def _keeper(stop: threading.Event, beat: Any, state: Dict[str, Any], plat: Any, 
             log.debug("sensor context refresh failed: %s", e)
 
 
+def _domain_refresher(stop: threading.Event, live: Dict[str, Any]) -> None:
+    """Fetch the malicious-domain list in the background (capture must not wait for it) and daily after that."""
+    while True:
+        new = load_domains()
+        if new and new != live["domains"]:
+            live["domains"] = new
+            if live.get("det") is not None:
+                live["det"].domains = new
+            _say("危険ドメインリストを読み込みました: %d 件" % len(new))
+        if stop.wait(86400):
+            return
+
+
 def _interrupt(signum: int, frame: Any) -> None:
     raise KeyboardInterrupt
 
@@ -287,25 +320,32 @@ def run(iface: Optional[str] = None, use_domains: bool = True) -> int:
     if not ctx["iface"]:
         print("監視するネットワークインターフェースが見つかりません（-i en0 で指定）", file=sys.stderr)
         return 2
-    domains = load_domains() if use_domains else set()
-    spool = paths.sub("sensor", "events.jsonl")
-    beat = paths.sub("sensor", "heartbeat")
+    os.umask(0o022)  # files stay readable (not writable) for the dashboard running as the normal user
+    try:
+        state = prepare_state_dir()
+    except (OSError, RuntimeError) as e:
+        print("センサーの保存先を準備できません: %s" % e, file=sys.stderr)
+        return 2
+    domains = load_domains(download=False) if use_domains else set()
+    spool = state / "events.jsonl"
+    beat = state / "heartbeat"
     signal.signal(signal.SIGTERM, _interrupt)  # kill / launchd stop -> same clean shutdown as Ctrl+C
-    state: Dict[str, Any] = {"ctx": ctx, "restart": False, "cap": None, "det": None}
+    live: Dict[str, Any] = {"ctx": ctx, "restart": False, "cap": None, "det": None, "domains": domains}
     stop = threading.Event()
-    threading.Thread(target=_keeper, args=(stop, beat, state, plat, iface), daemon=True).start()
+    threading.Thread(target=_keeper, args=(stop, beat, live, plat, iface), daemon=True).start()
+    if use_domains:
+        threading.Thread(target=_domain_refresher, args=(stop, live), daemon=True).start()
     ever_ok, backoff = False, 5.0
     try:
         with open(str(spool), "a", encoding="utf-8") as out:
-            paths.chown_to_invoker(spool)
             while True:
-                c = state["ctx"]
-                det = Detector(c["ip"], c["mac"], c["gw"], c["gw_mac"], domains)
-                state["det"] = det
+                c = live["ctx"]
+                det = Detector(c["ip"], c["mac"], c["gw"], c["gw_mac"], live["domains"])
+                live["det"] = det
                 cap = Capture(tcpdump_cmd(c["iface"], c["ip"]))
-                state["cap"] = cap
+                live["cap"] = cap
                 _say("KEKKAI sensor: %s (%s) を監視中 / 危険ドメイン %d 件 / Ctrl+C で停止" % (
-                    c["iface"], c["ip"] or "IP不明", len(domains)))
+                    c["iface"], c["ip"] or "IP不明", len(live["domains"])))
                 assert cap.proc.stdout is not None
                 for line in cap.proc.stdout:
                     ev = det.feed(line.rstrip("\n"))
@@ -316,8 +356,8 @@ def run(iface: Optional[str] = None, use_domains: bool = True) -> int:
                 rc = cap.finish()
                 if cap.listening.is_set() or time.time() - cap.started > 5:
                     ever_ok, backoff = True, (5.0 if time.time() - cap.started > 60 else backoff)
-                if state["restart"]:
-                    state["restart"] = False
+                if live["restart"]:
+                    live["restart"] = False
                     _say("ネットワークの変更を検知しました。新しい設定で監視を再開します")
                     continue
                 why = " / ".join(cap.errors) or "終了コード %s" % rc
@@ -327,11 +367,11 @@ def run(iface: Optional[str] = None, use_domains: bool = True) -> int:
                 print("tcpdump が停止しました（%s）。%d 秒後に再開します" % (why, backoff), file=sys.stderr, flush=True)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
-                state["ctx"] = refresh(state["ctx"], sensor_context(plat, iface))
+                live["ctx"] = refresh(live["ctx"], sensor_context(plat, iface))
     except KeyboardInterrupt:
         return 0
     finally:
         stop.set()
-        if state["cap"] is not None:
-            state["cap"].stop()
-            state["cap"].finish()
+        if live["cap"] is not None:
+            live["cap"].stop()
+            live["cap"].finish()
