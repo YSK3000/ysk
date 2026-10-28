@@ -282,8 +282,9 @@ def cmd_portscan(a: argparse.Namespace) -> int:
     from kekkai.discovery.portscan import ScopeError, raise_fd_limit, scan_host
     raise_fd_limit()
     ports = [int(p) for p in a.ports.split(",")] if a.ports else None
+    use_nmap = a.deep or (not a.tcp and not ports and nmap.available())
     try:
-        res = nmap.scan(a.ip) if a.deep else scan_host(a.ip, ports=ports)
+        res = nmap.scan(a.ip) if use_nmap else scan_host(a.ip, ports=ports)
     except (ScopeError, RuntimeError) as e:
         print("  " + c(str(e), "31"))
         return 2
@@ -508,8 +509,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_exposure)
     s = sub.add_parser("portscan", help="LAN内の機器のポートスキャン（プライベートIPのみ）")
     s.add_argument("ip")
-    s.add_argument("--deep", action="store_true", help="nmap -sV を使用")
-    s.add_argument("--ports", help="例: 22,80,443")
+    s.add_argument("--deep", action="store_true", help="nmap -sV を使う（nmapが無ければエラー）")
+    s.add_argument("--tcp", action="store_true", help="nmapがあっても内蔵スキャナを使う")
+    s.add_argument("--ports", help="例: 22,80,443（内蔵スキャナ）")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_portscan)
     s = sub.add_parser("lookup", help="IPアドレスの照会")

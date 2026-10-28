@@ -376,10 +376,13 @@ class Monitor:
             bkey = "lan_baseline:%s" % net_id
             baselined = bool(self.store.kv_get(bkey))
             findings: List[Finding] = []
+            new_ips: List[str] = []
             for d in res["devices"]:
                 fields = {k: d.get(k) for k in ("vendor", "hostname", "kind", "model", "services", "upnp")}
                 fields["randomized"] = d.get("randomized")
                 row, is_new = self.store.upsert_device(net_id, d["mac"], d["ip"], **fields)
+                if is_new and d["kind"] != "this" and d.get("ip"):
+                    new_ips.append(d["ip"])
                 if is_new and baselined and net.get("trusted") and d["kind"] != "this":
                     findings.append(rules.new_device_finding(d))
                 if d["kind"] != "this":
@@ -414,6 +417,9 @@ class Monitor:
                         subject=net_id, data={"mappings": igd.get("mappings", [])}))
                 self.store.kv_set(ukey, sorted(set(keys) | set(ubase or [])))
             self.raise_findings(findings, net_id)
+            if new_ips and self.cfg.get("scan.deep_new_devices", False) and self._deep_available():
+                threading.Thread(target=self._autoscan_devices, args=(net_id, new_ips), daemon=True,
+                                 name="kekkai-autoscan").start()
             with self.lock:
                 self.state["lan"] = {"running": False, "last": time.time(), "stats": res["stats"]}
                 if igd is not None:
@@ -611,9 +617,18 @@ class Monitor:
         self.raise_findings(findings, (self.state.get("network") or {}).get("id"))
 
     # ------------------------------------------------------------ scans
+    def resolve_scan_mode(self, mode: str) -> str:
+        """'auto' -> 'deep' when nmap is usable (config scan.use_nmap and installed), else 'quick'."""
+        if mode != "auto":
+            return mode
+        if self.cfg.get("scan.use_nmap", True) and self._deep_available():
+            return "deep"
+        return "quick"
+
     def start_scan(self, ip: str, mode: str = "quick") -> Dict[str, Any]:
         if not is_local_target(ip):
             raise ScopeError("LAN内(プライベートIP)のみスキャンできます")
+        mode = self.resolve_scan_mode(mode)
         if mode == "deep" and not self._deep_available():
             raise RuntimeError("詳細スキャンには nmap が必要です（brew install nmap）")
         running = [j for j in self.jobs.values() if j["status"] == "running"]
@@ -644,6 +659,24 @@ class Monitor:
         old = [k for k, j in self.jobs.items() if j["status"] != "running" and time.time() - j.get("finished", 0) > 3600]
         for k in old:
             self.jobs.pop(k, None)
+
+    def _autoscan_devices(self, net_id: Optional[str], ips: List[str]) -> None:
+        """Deep-scan (nmap -sV) newly found LAN devices once, sequentially, to learn their services.
+        LAN-only (is_local_target), best-effort: one slow host must not stop the rest or the monitor."""
+        for ip in ips:
+            if self._stop.is_set():
+                return
+            if not is_local_target(ip):
+                continue
+            try:
+                res = self._deep_scan(ip)
+            except Exception as e:  # noqa: BLE001  one unreachable/odd host must not abort the sweep
+                self.store.log_event("lan", "自動詳細スキャン失敗 %s: %s" % (ip, e))
+                continue
+            dev = self.store.device_by_ip(net_id, ip) if net_id else None
+            if dev:
+                self.store.set_device_ports(net_id, dev["mac"], res["open"])
+            self.raise_findings(rules.risky_service_findings(dev or {"ip": ip}, res), net_id)
 
     # ------------------------------------------------------------ views
     def sensor_status(self) -> Dict[str, Any]:

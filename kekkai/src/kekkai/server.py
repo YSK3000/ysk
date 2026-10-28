@@ -214,8 +214,10 @@ class App:
             return m.store.network(nid)
         if path == "/api/scan":
             ip = str(body.get("ip", ""))
+            mode = body.get("mode")
             try:
-                return m.start_scan(ip, "deep" if body.get("mode") == "deep" else "quick")
+                # default to "auto": use nmap -sV when installed, else the built-in TCP scanner
+                return m.start_scan(ip, mode if mode in ("deep", "quick", "auto") else "auto")
             except ScopeError as e:
                 raise ApiError(403, str(e))
             except RuntimeError as e:

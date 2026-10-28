@@ -3,6 +3,7 @@
 #  1) Tor: 公式の tor を入れて起動し、Tor Project 公式の onion 一覧にある .onion を KEKKAI で読めるか（必須）
 #  2) ransomware.live API v2 の実際の応答（記録のみ）
 #  3) sfltool dumpbtm の実際の出力（ログイン項目の監視の準備、記録のみ）
+#  4) nmap: 公式の nmap を入れて、KEKKAI の詳細スキャン(-sV)が実機で動くか（必須）
 set -u
 cd "$(dirname "$0")/.."
 PY=/usr/bin/python3
@@ -51,3 +52,26 @@ done
 echo "==== 3) sfltool dumpbtm"
 sudo sfltool dumpbtm > /tmp/btm.txt 2>&1; echo "rc=$? lines=$(wc -l < /tmp/btm.txt)"
 head -90 /tmp/btm.txt
+
+echo "==== 4) nmap deep scan (service/version detection, LAN-only guard on 127.0.0.1)"
+brew install nmap > /dev/null 2>&1 || { echo "FAIL: brew install nmap"; exit 1; }
+nmap --version | head -1
+NMAP_OUT=$(mktemp)
+if PYTHONPATH=src "$PY" -m kekkai portscan 127.0.0.1 --deep --json > "$NMAP_OUT"; then
+  "$PY" - "$NMAP_OUT" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        r = json.load(f)
+    ok = (isinstance(r, dict) and r.get("method") == "nmap -sV" and isinstance(r.get("open"), list))
+    print("nmap method=%r open=%d" % (r.get("method"), len(r.get("open", []))))
+except (OSError, ValueError) as e:
+    print("parse error: %s" % e); ok = False
+sys.exit(0 if ok else 1)
+PY
+  rc=$?
+else
+  echo "kekkai portscan --deep exited nonzero"; rc=1
+fi
+rm -f "$NMAP_OUT"
+[ $rc = 0 ] && echo "PASS nmap -sV deep scan ran and parsed via KEKKAI" || { echo "FAIL: nmap deep scan"; exit 1; }

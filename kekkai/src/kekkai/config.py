@@ -53,7 +53,7 @@ DEFAULTS: Dict[str, Any] = {
         "redact_for_cloud": True,
     },
     "server": {"host": "127.0.0.1", "port": 47665, "open_browser": True},
-    "scan": {"timeout_sec": 0.8, "concurrency": 256},
+    "scan": {"timeout_sec": 0.8, "concurrency": 256, "use_nmap": True, "deep_new_devices": False},
     "rules": {
         "muted": [],
         "suspicious_remote_ports": [23, 2323, 1337, 31337, 4444, 5555, 6666, 6667, 6668, 6669,

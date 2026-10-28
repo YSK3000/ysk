@@ -192,8 +192,9 @@ class KekkaiTools:
         from kekkai.discovery.portscan import ScopeError, raise_fd_limit, scan_host
         raise_fd_limit()
         ip = str(a.get("ip", ""))
+        use_nmap = a.get("deep") or (nmap.available() and not a.get("tcp"))
         try:
-            res = nmap.scan(ip) if a.get("deep") else scan_host(ip)
+            res = nmap.scan(ip) if use_nmap else scan_host(ip)
         except ScopeError as e:
             raise ToolError(str(e))
         except RuntimeError as e:
