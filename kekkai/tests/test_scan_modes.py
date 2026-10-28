@@ -125,5 +125,23 @@ class ExposureDiffTest(unittest.TestCase):
         self.assertEqual(self._news(), [])
 
 
+class ExposedLanServiceTest(unittest.TestCase):
+    def test_flags_only_ports_also_visible_on_public_ip(self):
+        from kekkai.detect import engine
+        dev = {"ip": "192.168.1.50", "mac": "aa:bb:cc:dd:ee:ff", "vendor": "Acme"}
+        scan = {"open": [{"port": 3389, "service": "rdp", "risk": "high"},
+                         {"port": 8123, "service": "home-assistant", "risk": "low"}]}
+        out = engine.exposed_lan_service_findings(dev, scan, {3389})
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].rule, "exposure.lan_service_exposed")
+        self.assertEqual(out[0].severity, "critical")  # RDP reachable from the internet
+        self.assertIn("3389", out[0].title)
+
+    def test_no_exposure_no_findings(self):
+        from kekkai.detect import engine
+        scan = {"open": [{"port": 3389, "service": "rdp", "risk": "high"}]}
+        self.assertEqual(engine.exposed_lan_service_findings({"ip": "192.168.1.50"}, scan, set()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

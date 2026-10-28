@@ -677,7 +677,10 @@ class Monitor:
             dev = self.store.device_by_ip(net_id, job["ip"]) if net_id else None
             if dev:
                 self.store.set_device_ports(net_id, dev["mac"], res["open"])
-            self.raise_findings(rules.risky_service_findings(dev or {"ip": job["ip"]}, res), net_id)
+            target = dev or {"ip": job["ip"]}
+            scan_findings = rules.risky_service_findings(target, res)
+            scan_findings += rules.exposed_lan_service_findings(target, res, self._exposed_ports())
+            self.raise_findings(scan_findings, net_id)
             job.update(status="done", result=res, finished=time.time())
         except Exception as e:  # noqa: BLE001
             job.update(status="error", error=str(e), finished=time.time())
@@ -702,7 +705,18 @@ class Monitor:
             dev = self.store.device_by_ip(net_id, ip) if net_id else None
             if dev:
                 self.store.set_device_ports(net_id, dev["mac"], res["open"])
-            self.raise_findings(rules.risky_service_findings(dev or {"ip": ip}, res), net_id)
+            target = dev or {"ip": ip}
+            scan_findings = rules.risky_service_findings(target, res)
+            scan_findings += rules.exposed_lan_service_findings(target, res, self._exposed_ports())
+            self.raise_findings(scan_findings, net_id)
+
+    def _exposed_ports(self) -> set:
+        """Ports currently visible on the public IP (Shodan InternetDB); empty on a shared/CGNAT IP."""
+        exp = self.state.get("exposure") or {}
+        if exp.get("shared_ipv4"):
+            return set()
+        idb = exp.get("internetdb") or {}
+        return {int(p) for p in idb.get("ports", []) if str(p).isdigit()}
 
     # ------------------------------------------------------------ views
     def sensor_status(self) -> Dict[str, Any]:

@@ -191,6 +191,34 @@ def risky_service_findings(dev: Dict[str, Any], scan: Dict[str, Any]) -> List[Fi
     return out
 
 
+# Ports that are especially dangerous to have reachable from the internet (remote takeover / data exposure).
+INTERNET_CRITICAL_PORTS = {23, 445, 2375, 3389, 5555, 5900, 6379, 7547, 9200, 11211, 27017, 37215, 52869}
+
+
+def exposed_lan_service_findings(dev: Dict[str, Any], scan: Dict[str, Any],
+                                 exposed_ports: Set[int]) -> List[Finding]:
+    """A port open on a LAN device that is ALSO visible on the public IP (Shodan): combining the
+    LAN scan with the internet-exposure view catches services that are reachable from outside."""
+    out = []
+    if not exposed_ports:
+        return out
+    for p in scan.get("open", []):
+        port = p.get("port")
+        if port in exposed_ports:
+            sev = "critical" if port in INTERNET_CRITICAL_PORTS else "high"
+            out.append(Finding(
+                "exposure.lan_service_exposed", sev,
+                "LAN機器のサービスがインターネットからも到達可能: %s %s/%s" % (
+                    dev.get("hostname") or dev.get("ip"), port, p.get("service")),
+                "%s（%s）で開いているポート %d が、公開IPでも開いていることを確認しました。"
+                "ルーターのポート転送やUPnPで外部に公開されている可能性があります。" % (
+                    dev.get("ip"), dev.get("vendor") or "メーカー不明", port),
+                "意図した公開でなければ、ルーターでポート転送を削除しUPnPを無効化してください。"
+                "該当サービスは強い認証と最新化を必須に。",
+                subject="%s:%s:wan" % (dev.get("mac") or dev.get("ip"), port), data={"device": dev, "port": p}))
+    return out
+
+
 # ------------------------------------------------------------------ host rules
 
 def listener_key(item: Dict[str, Any]) -> str:
