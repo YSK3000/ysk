@@ -97,5 +97,33 @@ class AutoScanDevicesTest(unittest.TestCase):
         self.assertEqual(rf.call_count, 1)  # only the successful scan produced findings
 
 
+class ExposureDiffTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.m, _, store = _monitor(self.tmp.name)
+        self.addCleanup(store.close)
+        self.captured = []
+        self.m.raise_findings = lambda findings, net_id: self.captured.append(list(findings))
+        self.m._public_ip = lambda: "203.0.113.9"
+        self.ports = [80]
+        self.m._internetdb = lambda ip: {"ip": ip, "found": True, "ports": list(self.ports),
+                                         "vulns": [], "hostnames": [], "tags": [], "cpes": []}
+
+    def _news(self):
+        return [f for f in self.captured[-1] if f.rule == "exposure.new_exposure"]
+
+    def test_only_newly_exposed_ports_alert(self):
+        self.m.exposure_cycle()                      # first run: establish baseline, no new-exposure alert
+        self.assertEqual(self._news(), [])
+        self.ports = [80, 3389]                       # a new port appears from the internet
+        self.m.exposure_cycle()
+        news = self._news()
+        self.assertEqual(len(news), 1)
+        self.assertIn("3389", news[0].detail)
+        self.m.exposure_cycle()                       # unchanged since last check: no repeat alert
+        self.assertEqual(self._news(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

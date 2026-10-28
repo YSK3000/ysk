@@ -541,6 +541,32 @@ class Monitor:
                                             subject="%s:%s" % (pub, f.get("port", f["title"])), data=f))
         if not res.get("shared_ipv4"):
             findings += rules.exposure_kev_findings(pub, self.vulns.kev_for(((res.get("internetdb") or {}).get("vulns")) or []))
+        # Alert only on what is NEWLY visible from the internet since the last check (ports/CVEs
+        # that just appeared), so steady exposure is not re-alerted every cycle but a fresh hole
+        # (e.g. UPnP just opened a port, or a new CVE got associated) is caught fast.
+        idbd = res.get("internetdb") or {}
+        if pub and idbd.get("found") and not res.get("shared_ipv4"):
+            cur_ports = sorted({int(p) for p in idbd.get("ports", []) if str(p).isdigit()})
+            cur_vulns = sorted({str(v) for v in idbd.get("vulns", [])})
+            bkey = "exposure_baseline:%s" % pub
+            base = self.store.kv_get(bkey)
+            if base is not None:
+                new_ports = [p for p in cur_ports if p not in set(base.get("ports", []))]
+                new_vulns = [v for v in cur_vulns if v not in set(base.get("vulns", []))]
+                if new_ports or new_vulns:
+                    parts = []
+                    if new_ports:
+                        parts.append("ポート: " + "、".join(str(p) for p in new_ports))
+                    if new_vulns:
+                        parts.append("CVE: " + "、".join(new_vulns[:12]))
+                    findings.append(Finding(
+                        "exposure.new_exposure", "high",
+                        "インターネットから新たに見える項目が増えました",
+                        " / ".join(parts),
+                        "前回の確認時には外部から見えなかったものです。ルーターのポート開放・UPnP・公開サーバー設定を"
+                        "至急確認してください（心当たりが無ければ第三者による開放の疑い）。",
+                        subject="%s:new" % pub, data={"new_ports": new_ports, "new_vulns": new_vulns}))
+            self.store.kv_set(bkey, {"ports": cur_ports, "vulns": cur_vulns})
         net_id = (self.state.get("network") or {}).get("id")
         self.raise_findings(findings, net_id)
         with self.lock:
@@ -694,6 +720,7 @@ class Monitor:
                     "home": s.get("home"), "stats": s.get("stats"), "threat": s.get("threat") or CHECKING, "lan": s.get("lan"),
                     "sensor": self.sensor_status(), "cycle": s.get("cycle"), "monitoring": self.monitoring_status(),
                     "posture_score": (s.get("posture") or {}).get("score"), "health": s.get("health"),
+                    "exposure_checked_at": (s.get("exposure") or {}).get("checked_at"),
                     "geo": self.geo.available, "feeds_entries": self.feeds.total_entries}
 
     def monitoring_status(self) -> Dict[str, Any]:
