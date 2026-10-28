@@ -73,6 +73,75 @@ def search_ransomware_live(terms: List[str], fetch: Callable[..., Any] = http_ge
             "queries": queries, "queried": done, "ts": time.time()}
 
 
+def _victim(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: r.get(k) for k in VICTIM_KEEP if r.get(k) is not None}
+
+
+def search_victims(query: str, fetch: Callable[..., Any] = http_get, limit: int = 50) -> Dict[str, Any]:
+    """Search ransomware leak-site victim listings for a keyword. Returns only the public metadata
+    (who was listed, which group, when, and the leak-site post URL) — never the leaked data itself."""
+    out: Dict[str, Any] = {"query": query, "victims": [], "count": 0, "error": None, "rate_limited": False,
+                           "attribution": ATTRIBUTION, "ts": time.time()}
+    toks = _norm(query).split()
+    if not toks:
+        return out
+    try:
+        status, _, body = fetch("%s/searchvictims/%s" % (RL_BASE, urllib.parse.quote(toks[0])),
+                                timeout=30, max_bytes=16 * 1024 * 1024)
+        if status == 429:
+            out["rate_limited"] = True
+            return out
+        if status != 200:
+            out["error"] = "HTTP %s" % status
+            return out
+        rows = json.loads(body.decode("utf-8", "replace"))
+    except (FetchError, ValueError) as e:
+        out["error"] = str(e)
+        return out
+    vics = []
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict):
+            continue
+        if len(toks) > 1:  # all extra words must appear somewhere in the row, to narrow a broad first token
+            hay = _norm(" ".join(str(r.get(k) or "") for k in ("victim", "post_title", "domain", "group", "country")))
+            if not all(t in hay for t in toks[1:]):
+                continue
+        vics.append(_victim(r))
+    out["count"] = len(vics)
+    out["victims"] = vics[:limit]
+    return out
+
+
+def recent_victims(country: Optional[str] = None, fetch: Callable[..., Any] = http_get,
+                   limit: int = 50) -> Dict[str, Any]:
+    """Recently listed ransomware leak-site victims, optionally for one country (ISO code, e.g. JP).
+    Metadata only — a situational-awareness feed, not the leaked data."""
+    cc = (country or "").strip().upper()
+    path = "countryvictims/%s" % urllib.parse.quote(cc) if cc else "recentvictims"
+    out: Dict[str, Any] = {"country": cc or None, "victims": [], "count": 0, "error": None,
+                           "rate_limited": False, "attribution": ATTRIBUTION, "ts": time.time()}
+    try:
+        status, _, body = fetch("%s/%s" % (RL_BASE, path), timeout=30, max_bytes=16 * 1024 * 1024)
+        if status == 429:
+            out["rate_limited"] = True
+            return out
+        if status != 200:
+            out["error"] = "HTTP %s" % status
+            return out
+        rows = json.loads(body.decode("utf-8", "replace"))
+    except (FetchError, ValueError) as e:
+        out["error"] = str(e)
+        return out
+    vics = [_victim(r) for r in (rows if isinstance(rows, list) else []) if isinstance(r, dict)]
+
+    def _when(v: Dict[str, Any]) -> str:
+        return str(v.get("attackdate") or v.get("discovered") or v.get("published") or "")
+    vics.sort(key=_when, reverse=True)
+    out["count"] = len(vics)
+    out["victims"] = vics[:limit]
+    return out
+
+
 def check(targets: List[str], fetch: Callable[..., Any] = http_get) -> Dict[str, Any]:
     rl = search_ransomware_live(targets, fetch=fetch)
     return {"ts": time.time(), "targets": targets, "sources": [rl],

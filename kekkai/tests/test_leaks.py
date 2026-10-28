@@ -62,5 +62,34 @@ class LeaksTest(unittest.TestCase):
         self.assertIsNone(res["error"])
 
 
+class LeakSearchTest(unittest.TestCase):
+    def test_search_returns_metadata_not_leaked_data(self):
+        calls = []
+        res = leaks.search_victims("ACME", fetch=fake_fetch(calls))
+        self.assertTrue(all("/searchvictims/" in u for u in calls))
+        self.assertEqual(res["count"], 2)
+        self.assertEqual(res["victims"][0]["victim"], "ACME Corporation")
+
+    def test_search_multiword_narrows_rows(self):  # second token must appear in the row (country JP)
+        res = leaks.search_victims("acme jp", fetch=fake_fetch([]))
+        self.assertEqual([v["victim"] for v in res["victims"]], ["ACME Corporation"])
+
+    def test_search_rate_limited(self):
+        res = leaks.search_victims("acme", fetch=lambda u, **_: (429, {}, b"{}"))
+        self.assertTrue(res["rate_limited"])
+        self.assertEqual(res["victims"], [])
+
+    def test_recent_victims_country_endpoint_and_sorted(self):
+        calls = []
+        def f(url, **_):
+            calls.append(url)
+            return 200, {}, json.dumps(ROWS).encode()
+        res = leaks.recent_victims("jp", fetch=f)
+        self.assertTrue(any("/countryvictims/JP" in u for u in calls))
+        self.assertEqual(res["country"], "JP")
+        # newest attackdate first
+        self.assertEqual(res["victims"][0]["victim"], "ACME Corporation")
+
+
 if __name__ == "__main__":
     unittest.main()

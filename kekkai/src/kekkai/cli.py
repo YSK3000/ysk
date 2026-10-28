@@ -377,9 +377,41 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
     return 0
 
 
+def _print_victims(res: dict, header: str) -> int:
+    if res.get("error"):
+        print("  取得エラー: %s" % res["error"])
+        return 1
+    if res.get("rate_limited"):
+        print("  ※ 情報源の制限（1分に1回）により取得できませんでした。時間をおいて再実行してください。")
+        return 1
+    vics = res.get("victims") or []
+    print("  %s: %d 件%s" % (header, res.get("count", len(vics)),
+                            "（上位 %d 件を表示）" % len(vics) if res.get("count", 0) > len(vics) else ""))
+    for m in vics:
+        print("   - %s | グループ: %s | %s | %s | %s" % (
+            m.get("victim") or m.get("post_title"), m.get("group") or m.get("group_name"),
+            m.get("country") or "", (m.get("attackdate") or m.get("discovered") or m.get("published") or "")[:10],
+            m.get("url") or m.get("post_url") or ""))
+    print("  " + res.get("attribution", ""))
+    print("  ※ 流出データ本体は取得しません。公開情報（被害組織の一覧）のみを表示しています。")
+    return 0
+
+
 def cmd_leaks(a: argparse.Namespace) -> int:
     from kekkai import config
     from kekkai.intel import leaks
+    if getattr(a, "search", None):
+        res = leaks.search_victims(a.search)
+        if a.json:
+            print(dumps(res))
+            return 0
+        return _print_victims(res, "暴露サイトの被害組織を検索「%s」" % a.search)
+    if getattr(a, "country", None):
+        res = leaks.recent_victims(a.country)
+        if a.json:
+            print(dumps(res))
+            return 0
+        return _print_victims(res, "最近の被害組織（%s）" % (a.country.upper()))
     cfg = config.load()
     targets = a.target or [str(x) for x in (cfg.get("watch.names", []) or []) + (cfg.get("watch.domains", []) or [])]
     if not targets:
@@ -528,8 +560,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("mcp", help="MCPサーバー（Claude Code / Claude Desktop 用）").set_defaults(fn=cmd_mcp)
     sub.add_parser("install-agent", help="ログイン時に自動起動（macOS）").set_defaults(fn=cmd_install_agent)
     sub.add_parser("uninstall-agent", help="自動起動を解除").set_defaults(fn=cmd_uninstall_agent)
-    s = sub.add_parser("leaks", help="自分のドメイン・組織名が暴露サイトに載っていないか確認")
+    s = sub.add_parser("leaks", help="暴露サイト(ダークウェブ)の流出情報を確認・検索")
     s.add_argument("--target", nargs="+", help="確認する語（未指定なら config の watch.* を使用）")
+    s.add_argument("--search", help="暴露サイトの被害組織をキーワード検索（例: --search \"会社名\"）")
+    s.add_argument("--country", help="最近の被害組織を国別に一覧（ISOコード 例: --country JP）")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_leaks)
     s = sub.add_parser("onion", help=".onion のページを Tor 経由で読む（文字情報のみ）")

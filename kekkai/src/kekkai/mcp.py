@@ -81,6 +81,15 @@ TOOLS: List[Dict[str, Any]] = [
      "description": "How the internet sees the home: public IP, Shodan InternetDB ports/CVEs, router UPnP port mappings.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True}},
+    {"name": "kekkai_leak_search", "title": "暴露サイトの流出情報を検索",
+     "description": "Search dark-web ransomware leak-site victim listings (ransomware.live) by keyword, or list "
+                    "recent victims for a country (ISO code, e.g. JP). Returns public metadata only (who was "
+                    "listed, which group, when, the leak-site post URL) — never the leaked data itself.",
+     "inputSchema": {"type": "object", "properties": {
+         "query": {"type": "string", "description": "keyword to search for (company name or domain)"},
+         "country": {"type": "string", "description": "ISO country code for recent victims, e.g. JP"}},
+         "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True}},
     {"name": "kekkai_report", "title": "レポート",
      "description": "Full Markdown security report (alerts, devices, traffic, audit, exposure).",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}, "annotations": RO},
@@ -212,6 +221,13 @@ class KekkaiTools:
 
     def t_exposure(self, a: Dict[str, Any]) -> Any:
         return self.m.exposure_cycle()
+
+    def t_leak_search(self, a: Dict[str, Any]) -> Any:
+        from kekkai.intel import leaks
+        q = str(a.get("query") or "").strip()
+        if q:
+            return leaks.search_victims(q)
+        return leaks.recent_victims(str(a.get("country") or "").strip() or None)
 
     def t_report(self, a: Dict[str, Any]) -> Any:
         from kekkai import report
