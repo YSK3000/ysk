@@ -38,12 +38,12 @@ running() { $PY -c "import sys; sys.path.insert(0, 'src'); from kekkai import cl
 NEW="$(mktemp -d)/kekkai-new"
 mkdir -p "$NEW" && cp -R kekkai src "$NEW/" || fail "copy"
 sed -i '' 's/^__version__ = .*/__version__ = "9.9.9"/' "$NEW/src/kekkai/__init__.py"
-( cd "$NEW" && ./kekkai open ) > /tmp/kekkai-open.txt 2>&1; cat /tmp/kekkai-open.txt
+( cd "$NEW" && ./kekkai open ) > /tmp/kekkai-open.txt 2>&1; sed 's/token=[^ ]*/token=<hidden>/' /tmp/kekkai-open.txt
 grep -q "切り替えました" /tmp/kekkai-open.txt || fail "open from the new copy did not switch the agent"
 [ "$(running)" = "9.9.9" ] || fail "running version is $(running), expected 9.9.9"
 plutil -extract EnvironmentVariables.PYTHONPATH raw "$HOME/Library/LaunchAgents/com.kekkai.monitor.plist" | grep -q "kekkai-new/src" \
   || fail "agent still points at the old copy"
-./kekkai open > /tmp/kekkai-open2.txt 2>&1; cat /tmp/kekkai-open2.txt
+./kekkai open > /tmp/kekkai-open2.txt 2>&1; sed 's/token=[^ ]*/token=<hidden>/' /tmp/kekkai-open2.txt
 [ "$(running)" = "$($PY -c "import sys; sys.path.insert(0, 'src'); import kekkai; print(kekkai.__version__)")" ] || fail "did not switch back"
 echo "PASS replacing the app switches the background monitor to the new copy and version"
 ./kekkai uninstall-agent || fail "uninstall-agent"
