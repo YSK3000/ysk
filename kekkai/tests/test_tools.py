@@ -146,6 +146,28 @@ class InstallFlowTest(unittest.TestCase):
             self.assertEqual(tools._sha256(f.name), hashlib.sha256(b"abc").hexdigest())
 
 
+class BundleCommandTest(unittest.TestCase):
+    def test_official_app_bundle_runs_the_real_binary(self):
+        import os
+        from kekkai.discovery import nmap as nmapmod
+        with tempfile.TemporaryDirectory() as d:
+            app = os.path.join(d, "nmap.app", "Contents")
+            for rel in ("MacOS/nmap", "Resources/bin/nmap"):
+                path = os.path.join(app, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, 0o755)
+            os.makedirs(os.path.join(app, "Resources", "share", "nmap"))
+            with mock.patch.object(nmapmod, "find_cmd", return_value=os.path.join(app, "MacOS", "nmap")):
+                exe, env = nmapmod.command()
+            self.assertEqual(exe, os.path.join(app, "Resources", "bin", "nmap"))
+            self.assertEqual(env["DYLD_LIBRARY_PATH"], os.path.join(app, "Resources", "lib"))
+            self.assertEqual(env["NMAPDIR"], os.path.join(app, "Resources", "share", "nmap"))
+        with mock.patch.object(nmapmod, "find_cmd", return_value="/opt/homebrew/bin/nmap"):
+            self.assertEqual(nmapmod.command(), ("/opt/homebrew/bin/nmap", None))   # Homebrew: unchanged
+
+
 class MonitorInstallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

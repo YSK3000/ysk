@@ -28,7 +28,12 @@ PY
 ls -d /Applications/nmap.app /Applications/Zenmap.app /Applications/ncat.app /Applications/nping.app 2>&1
 [ -e /Applications/Zenmap.app ] && fail "Zenmap.app was installed (choice changes not applied)"
 [ -e /Applications/ncat.app ] && fail "ncat.app was installed (choice changes not applied)"
-file /Applications/nmap.app/Contents/MacOS/nmap; head -c 400 /Applications/nmap.app/Contents/MacOS/nmap | strings | head -12
+file /Applications/nmap.app/Contents/MacOS/nmap /Applications/nmap.app/Contents/Resources/bin/nmap
+echo "--- launcher script (record)"; cat /Applications/nmap.app/Contents/MacOS/nmap
+ls /Applications/nmap.app/Contents/Resources /Applications/nmap.app/Contents/Resources/share 2>&1 | head -20
+$PY -c "from kekkai.discovery.nmap import command; print('command() ->', command())"
+echo "--- launcher with KEKKAI's arguments (record only)"
+/Applications/nmap.app/Contents/MacOS/nmap -sV --version-light -T4 -Pn --top-ports 20 -oX - -- 127.0.0.1 2>&1 | tail -3
 
 echo "==== 3) deep scan with the installed nmap finds a real service and its version"
 $PY -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &

@@ -183,6 +183,7 @@ function nmapInstallControl() {
     return h("div", { class: "nmap-install" }, button("導入中…", { icon: "target", disabled: true }),
       h("p", { class: "small", role: "status" }, st.message || "nmap を導入しています…"));
   }
+  if (st.ok) return h("div", { class: "nmap-install" }, h("p", { class: "small ok-text", role: "status" }, st.message));
   const btn = button("nmapを入れる", {
     icon: "target", cls: "primary", title: "公式の配布元（Homebrew または nmap.org）から nmap を入れます",
     onclick: async () => {
@@ -208,8 +209,7 @@ function nmapInstallControl() {
       if (current) current.update();
     } });
   return h("div", { class: "nmap-install" }, btn,
-    st.error ? h("p", { class: "danger small", role: "alert" }, st.error) : null,
-    st.ok ? h("p", { class: "small", role: "status" }, st.message) : null);
+    st.error ? h("p", { class: "danger small", role: "alert" }, st.error) : null);
 }
 
 function toast(alert) {
@@ -331,8 +331,9 @@ Views.command = {
     clear(this.coverage);
     if (S.coverage) {
       add(this.coverage, h("div", { class: "coverage-grid" }, S.coverage.cards.map((card) =>
-        h("div", { class: "coverage-card" }, h("b", null, card.label), card.id === "connections" ? (UI.connectionCoverage = h("p", null, monitorView(sm, S.reachable).label)) : h("p", null, card.detail),
-          card.id === "nmap" && (card.installable || card.state === "installing" || (S.nmapInstall && (S.nmapInstall.running || S.nmapInstall.error))) ? nmapInstallControl() : null,
+        h("div", { class: "coverage-card" }, h("b", null, card.label), card.id === "connections" ? (UI.connectionCoverage = h("p", null, monitorView(sm, S.reachable).label))
+          : h("p", null, card.id === "nmap" && S.nmapInstall && S.nmapInstall.running ? "導入中です（完了まで数分。この画面はそのままで構いません）" : card.detail),
+          card.id === "nmap" && (card.installable || card.state === "installing" || S.nmapInstall) ? nmapInstallControl() : null,
           card.url ? h("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" }, "公式サイト") : h("span", { class: "muted small" }, card.action)))),
         h("p", { class: "muted small" }, S.coverage.limits.join(" ")));
     }

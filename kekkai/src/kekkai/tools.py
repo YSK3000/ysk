@@ -41,11 +41,13 @@ def brew_path() -> Optional[str]:
 
 
 def nmap_version(path: Optional[str] = None) -> Optional[str]:
-    exe = path or find_cmd("nmap")
+    from kekkai.discovery.nmap import command
+    exe, env = command()
     if not exe:
         return None
     try:
-        out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20).stdout
+        out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20,
+                             env=dict(os.environ, **(env or {}))).stdout
     except (OSError, subprocess.SubprocessError):
         return None
     m = re.search(r"Nmap version (\S+)", out)

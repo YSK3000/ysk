@@ -567,3 +567,4 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 /* nmap install control (coverage card / vulnerability view) */
 .nmap-install { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 6px 0 2px; }
 .nmap-install p { margin: 0; }
+.nmap-install .ok-text { color: var(--ok); }
