@@ -235,6 +235,27 @@ class AssessTest(unittest.TestCase):
         self.assertIn("NVD", joined)
         self.assertIn("公開IP", joined)
 
+    def test_coverage_cards_reflect_real_runs(self):
+        from kekkai.coverage import describe
+        cards = {c["id"]: c for c in describe(self.m)["cards"]}
+        self.assertEqual(cards["vulnscan"]["state"], "inactive")       # never claims a scan that did not run
+        self.assertEqual(cards["exposure"]["state"], "inactive")
+        self.assertEqual(cards["leaks"]["state"], "inactive")
+        self.m.nvd_client = lambda use_nvd=None: FakeNVD()
+        self.m.run_vulnscan(scan_devices=False)
+        cards = {c["id"]: c for c in describe(self.m)["cards"]}
+        self.assertEqual(cards["vulnscan"]["state"], "partial")        # no nmap / exposure here -> partial
+        self.assertIn("緊急 1", cards["vulnscan"]["detail"])
+
+    def test_report_includes_assessment(self):
+        from kekkai import report
+        self.m.nvd_client = lambda use_nvd=None: FakeNVD()
+        self.m.run_vulnscan(scan_devices=False)
+        md = report.markdown(self.m)
+        self.assertIn("## 脆弱性診断", md)
+        self.assertIn("CVE-2099-1002", md)
+        self.assertIn("未診断:", md)
+
     def test_kev_for_product_exact_match_only(self):
         db = self.m.vulns
         self.assertEqual([k["cveID"] for k in db.kev_for_product("openbsd", "openssh")], ["CVE-2099-2001"])

@@ -96,6 +96,21 @@ def markdown(m: Any, max_alerts: int = 30) -> str:
         for f in exp["findings"]:
             lines.append("- [%s] %s — %s" % (SEV_JA.get(f["severity"], f["severity"]), f["title"], f["detail"]))
         lines.append("")
+    vs = st.get("vulnscan") or {}
+    if vs.get("ts"):
+        s = vs.get("summary") or {}
+        lines.append("## 脆弱性診断（%s 実施）" % time.strftime("%Y-%m-%d %H:%M", time.localtime(vs["ts"])))
+        lines.append("")
+        lines.append("- 総合: %s（緊急 %d / 高 %d / 中 %d / 低 %d、悪用確認あり %d 件）" % (
+            s.get("label", "-"), s.get("critical", 0), s.get("high", 0), s.get("medium", 0), s.get("low", 0), s.get("exploited", 0)))
+        for i in (vs.get("items") or [])[:20]:
+            ids = ", ".join(c["id"] for c in (i.get("cves") or [])[:5] if c.get("id"))
+            lines.append("- [%s] %s — %s%s（確度: %s）→ %s" % (
+                SEV_JA.get(i["severity"], i["severity"]), _md_escape(i["asset"]), _md_escape(i["title"]),
+                " / " + ids if ids else "", i.get("confidence", "-"), i.get("fix", "")))
+        for g in vs.get("gaps") or []:
+            lines.append("- 未診断: %s" % g)
+        lines.append("")
     lines.append("---")
     lines.append("IP Geolocation by DB-IP (CC BY 4.0) / 脅威情報: abuse.ch, Spamhaus, FireHOL, Emerging Threats, CINS, Tor Project")
     return "\n".join(lines)
