@@ -161,7 +161,7 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 650; }
 .chip-violet { color: var(--violet); border-color: rgba(167, 139, 250, .4); background: rgba(167, 139, 250, .08); }
 
 .sev { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; height: 20px; padding: 0 7px; border-radius: 5px; font: 700 11px var(--sans); letter-spacing: .04em; color: #0b0f16; flex: none; }
-.sev-critical { background: var(--sev-critical); box-shadow: 0 0 12px rgba(255, 56, 96, .55); color: #fff; }
+.sev-critical { background: var(--sev-critical); box-shadow: 0 0 12px rgba(255, 56, 96, .55); color: #0b0f16; }
 .sev-high { background: var(--sev-high); }
 .sev-medium { background: var(--sev-medium); }
 .sev-low { background: var(--sev-low); }
@@ -435,6 +435,45 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 .find-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .find-list li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border-radius: 8px; background: rgba(255, 255, 255, .025); }
 .find-list p { margin: 3px 0 0; color: var(--text-2); font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- vulnerability assessment (脆弱性診断) */
+.grid-vuln { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.vuln-side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.vuln-verdict { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(255, 255, 255, .03); }
+.vuln-verdict b { font-size: 16px; }
+.vuln-verdict p { margin: 2px 0 0; }
+.vuln-counts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.vuln-counts li { display: flex; flex-direction: column; align-items: center; padding: 8px 4px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--text-2); }
+.vuln-counts b { font: 700 22px var(--mono); color: var(--text); }
+.vuln-counts .vc-critical b { color: var(--sev-critical); } .vuln-counts .vc-high b { color: var(--sev-high); }
+.vuln-counts .vc-medium b { color: var(--sev-medium); } .vuln-counts .vc-low b { color: var(--sev-low); }
+.vuln-expl { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--red); font-size: 13px; font-weight: 600; }
+.vuln-expl .icon { width: 16px; height: 16px; flex: none; }
+.vuln-sum-panel .kv { margin-top: 12px; }
+.vuln-run { margin-bottom: 12px; }
+.vuln-progress { width: 100%; height: 8px; appearance: none; -webkit-appearance: none; border: 0; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.vuln-progress::-webkit-progress-bar { background: rgba(255, 255, 255, .08); border-radius: 99px; }
+.vuln-progress::-webkit-progress-value { background: var(--cyan); border-radius: 99px; }
+.vuln-progress::-moz-progress-bar { background: var(--cyan); border-radius: 99px; }
+.vuln-run p { margin: 6px 0 0; color: var(--text-2); }
+.gap-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
+.gap-list li::marker { color: var(--amber); }
+.vuln-gap-panel { border-color: rgba(255, 176, 32, .35); }
+.vuln-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.vuln-item { padding: 12px 14px; border-radius: 8px; background: rgba(255, 255, 255, .025); min-width: 0; }
+.vuln-item.sev-b-critical { background: linear-gradient(90deg, rgba(255, 56, 96, .1), rgba(255, 255, 255, .02) 40%); }
+.vi-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vi-title { margin: 8px 0 2px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.vi-asset { margin: 0; color: var(--text-2); font-size: 12.5px; overflow-wrap: anywhere; }
+.vi-cves { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; font-size: 12px; }
+.cve { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 6px; }
+.cve a { color: var(--cyan); text-decoration: none; }
+.cve a:hover, .cve a:focus-visible { text-decoration: underline; }
+.cve-kev { border-color: rgba(255, 56, 96, .45); }
+.kev-mark { color: var(--red); font-size: 11px; font-weight: 700; }
+.vi-fix { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; }
+.vi-ev { margin: 6px 0 0; overflow-wrap: anywhere; }
+.vuln-limits { margin-top: 14px; line-height: 1.6; }
 .grid-intel { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .health-panel { grid-column: 1 / -1; }
 .lookup-out { margin-top: 12px; }
@@ -487,7 +526,7 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 }
 @media (max-width: 1020px) {
   body { overflow: auto; }
-  .grid-command, .grid-geo, .grid-lan, .grid-audit, .grid-exposure, .grid-intel { grid-template-columns: 1fr; height: auto; }
+  .grid-command, .grid-geo, .grid-lan, .grid-audit, .grid-vuln, .grid-exposure, .grid-intel { grid-template-columns: 1fr; height: auto; }
   .grid-command { grid-template-rows: auto; }
   .grid-command > .map-panel { min-height: 0; }
   .map-panel .panel-b { height: 54vw; min-height: 240px; }

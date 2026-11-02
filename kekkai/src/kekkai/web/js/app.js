@@ -21,6 +21,7 @@ const VIEWS = [
   { id: "traffic", label: "通信", en: "TRAFFIC", icon: "traffic" },
   { id: "alerts", label: "アラート", en: "ALERTS", icon: "alerts" },
   { id: "audit", label: "診断", en: "AUDIT", icon: "audit" },
+  { id: "vuln", label: "脆弱性診断", en: "VULN SCAN", icon: "vuln" },
   { id: "exposure", label: "外部露出", en: "EXPOSURE", icon: "exposure" },
   { id: "intel", label: "脅威情報", en: "INTEL", icon: "intel" },
 ];
@@ -30,6 +31,7 @@ const S = {
   posture: null, wifi: null, persistence: [], exposure: null, upnp: null, intel: null, ai: null, doctor: null,
   history: [], view: null, selectedMac: null, alertFilter: "active", trafficFilter: "internet", trafficQuery: "",
   reachable: false, geoHistory: false, geoRiskOnly: false, sse: false, lastConnFetch: 0, lastDevFetch: 0, aiBusy: {}, jobs: {},
+  vulnscan: null, vulnProgress: null, vulnFilter: "all",
 };
 
 const UI = {};
@@ -136,9 +138,10 @@ async function loadIntel() { S.intel = await api("/api/intel"); S.ai = await api
 async function loadHistory() { S.history = (await api("/api/destinations?hours=24")).destinations || []; }
 
 async function loadCoverage() { S.coverage = await api("/api/coverage"); }
+async function loadVulnscan() { S.vulnscan = await api("/api/vulnscan"); }
 
 const LOADERS = { coverage: loadCoverage, conns: loadConns, devices: loadDevices, alerts: loadAlerts, posture: loadPosture, exposure: loadExposure,
-                  intel: loadIntel, history: loadHistory };
+                  intel: loadIntel, history: loadHistory, vulnscan: loadVulnscan };
 
 async function refresh(keys) {
   await Promise.all(keys.map((k) => LOADERS[k]().catch((e) => console.warn("load", k, e))));
@@ -716,6 +719,107 @@ Views.audit = {
   },
 };
 
+// ------------------------------------------------------------------ VULN SCAN (脆弱性診断)
+const VULN_CAT_JA = { os: "このMac", service: "サービス", device: "機器", exposure: "公開IP", config: "設定" };
+
+function nvdLink(id) {
+  return h("a", { href: `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`, target: "_blank",
+                  rel: "noopener noreferrer", class: "mono" }, id);
+}
+
+Views.vuln = {
+  needs: ["vulnscan"],
+  mount(el) {
+    const wrap = h("div", { class: "grid-vuln" });
+    const sp = panel("VULNERABILITY ASSESSMENT", "脆弱性診断", { cls: "vuln-sum-panel" });
+    this.actions = sp.actions; this.sum = sp.body;
+    const gp = panel("BLIND SPOTS", "診断できていない範囲", { cls: "vuln-gap-panel" });
+    this.gapPanel = gp.el; this.gaps = gp.body;
+    const rp = panel("FINDINGS", "検出事項（重大度順）", { cls: "vuln-list-panel" });
+    this.ractions = rp.actions; this.list = rp.body;
+    add(wrap, h("div", { class: "vuln-side" }, sp.el, gp.el), rp.el);
+    el.appendChild(wrap);
+  },
+  update() {
+    const v = S.vulnscan || {};
+    const r = v.result;
+    const p = S.vulnProgress || {};
+    const running = !!(v.running || p.running);
+    add(clear(this.actions), button(running ? "診断中…" : "今すぐ診断", {
+      icon: "vuln", disabled: running, title: "このMac・自宅LANの機器・公開IPを診断します（数分かかります）",
+      onclick: async () => {
+        S.vulnProgress = { running: true, message: "開始しています…", progress: 0 };
+        this.update();
+        try { await post("/api/vulnscan/run", { scan_devices: true }); }
+        catch (e) { S.vulnProgress = { running: false, error: String((e && e.message) || e) }; this.update(); }
+      } }));
+    clear(this.sum);
+    if (running) {
+      const pct = Math.round((p.progress || 0) * 100);
+      add(this.sum, h("div", { class: "vuln-run" },
+        h("progress", { class: "vuln-progress", max: "100", value: String(pct), "aria-label": "診断の進み具合" }),
+        h("p", { class: "small", role: "status" }, `${pct}%　${p.message || "診断中…"}`)));
+    }
+    if (p.error) this.sum.appendChild(h("p", { class: "danger small", role: "alert" }, p.error));
+    if (!r) {
+      if (!running) this.sum.appendChild(empty("まだ診断していません", v.nmap
+        ? "「今すぐ診断」で、このMac・LANの機器・公開IPを確認します"
+        : "「今すぐ診断」で開始します。nmap を入れると機器のサービスの版まで調べられます（brew install nmap）"));
+    } else {
+      const s = r.summary || {};
+      const cov = r.coverage || {};
+      const src = r.sources || {};
+      add(this.sum,
+        h("div", { class: ["vuln-verdict", s.worst && `sev-b-${s.worst}`] },
+          s.worst ? sevBadge(s.worst) : h("span", { class: "chip chip-mint" }, "OK"),
+          h("div", null, h("b", null, s.label || "-"),
+            h("p", { class: "muted small" }, `${ago(r.ts)}に診断・所要 ${Math.round(r.duration || 0)} 秒`))),
+        h("ul", { class: "vuln-counts" }, ["critical", "high", "medium", "low"].map((k) =>
+          h("li", { class: `vc-${k}` }, h("b", null, String(s[k] || 0)), h("span", null, SEV_JA[k])))),
+        s.exploited ? h("p", { class: "vuln-expl" }, icon("alerts"), `実際に悪用が確認された脆弱性を含む項目: ${s.exploited} 件`) : null,
+        kv([["対象の機器", `${cov.devices || 0} 台（版を特定 ${cov.with_versions || 0} 台）`],
+            ["nmap", cov.nmap ? "あり（サービスの版を特定）" : "なし（brew install nmap）"],
+            ["NVD照合", cov.nvd ? `${cov.nvd_queried || 0} 回（キャッシュ ${cov.nvd_cache_hits || 0} 件）${cov.nvd_rate_limited ? "・回数制限で一部未照合" : ""}`
+                                : "オフライン（製品名でKEV照合のみ）"],
+            ["データ", `CISA KEV ${src.kev_version || "未取得"}・Apple更新情報 ${src.sofa_lines || 0} 系列`]]));
+    }
+    clear(this.gaps);
+    const gaps = (r && r.gaps) || [];
+    this.gapPanel.hidden = !gaps.length;
+    if (gaps.length) this.gaps.appendChild(h("ul", { class: "gap-list" }, gaps.map((g) => h("li", null, g))));
+    add(clear(this.ractions), chips([["all", "すべて"], ["urgent", "緊急・高"], ["exploited", "悪用確認"]], S.vulnFilter,
+      (f) => { S.vulnFilter = f; this.update(); }));
+    clear(this.list);
+    let items = (r && r.items) || [];
+    if (S.vulnFilter === "urgent") items = items.filter((i) => i.severity === "critical" || i.severity === "high");
+    if (S.vulnFilter === "exploited") items = items.filter((i) => (i.exploited || []).length);
+    if (!r) {
+      this.list.appendChild(empty("診断結果はここに表示されます", "重大度・悪用の有無・直し方を一覧にします"));
+    } else if (!items.length) {
+      this.list.appendChild(empty(r.items.length ? "この条件の項目はありません" : "検出はありませんでした",
+        gaps.length ? "ただし「診断できていない範囲」があります" : "検出が無いことは安全の保証ではありません"));
+    } else {
+      this.list.appendChild(h("ol", { class: "vuln-list" }, items.map((i) => {
+        const cves = (i.cves || []).slice(0, 8);
+        return h("li", { class: ["vuln-item", `sev-b-${i.severity}`] },
+          h("div", { class: "vi-top" }, sevBadge(i.severity), h("span", { class: "chip" }, VULN_CAT_JA[i.category] || i.category),
+            (i.exploited || []).length ? h("span", { class: "chip chip-red", title: "CISA KEV: 実際の攻撃での悪用が確認済み" }, "悪用確認") : null,
+            h("span", { class: "chip", title: "この判定の確かさ" }, `確度 ${i.confidence || "-"}`),
+            i.score ? h("span", { class: "chip" }, `CVSS ${i.score}`) : null),
+          h("h3", { class: "vi-title" }, i.title),
+          h("p", { class: "vi-asset" }, i.asset, i.port ? h("span", { class: "muted mono" }, ` :${i.port}`) : null),
+          cves.length ? h("p", { class: "vi-cves" }, cves.map((c) => h("span", { class: ["cve", c.kev && "cve-kev"], title: c.summary || "" },
+            nvdLink(c.id), c.kev ? h("span", { class: "kev-mark" }, "悪用") : null)),
+            i.cve_count > cves.length ? h("span", { class: "muted small" }, `ほか ${i.cve_count - cves.length} 件`) : null) : null,
+          h("p", { class: "vi-fix" }, h("b", null, "直し方 "), i.fix || "-"),
+          h("p", { class: "vi-ev muted small" }, `根拠: ${i.evidence || "-"} ／ 出典: ${i.source || "-"}`));
+      })));
+    }
+    if (r && r.limits) this.list.appendChild(h("p", { class: "muted small vuln-limits" }, r.limits.join(" ")));
+    if (r && r.sources && r.sources.notice) this.list.appendChild(h("p", { class: "muted small" }, r.sources.notice));
+  },
+};
+
 Views.exposure = {
   needs: ["exposure"],
   mount(el) {
@@ -884,6 +988,12 @@ function connectSSE() {
   });
   es.addEventListener("posture", () => { if (current && current.id === "audit") refresh(["posture"]).then(() => current.update()); loadSummary(); });
   es.addEventListener("scan", () => { if (current && current.id === "lan") refresh(["devices"]).then(() => current.update()); });
+  es.addEventListener("vulnscan", (e) => {
+    try { S.vulnProgress = JSON.parse(e.data); } catch (_) { return; }
+    const show = () => { if (current && current.id === "vuln") current.update(); };
+    if (S.vulnProgress.running) show();
+    else refresh(["vulnscan", "coverage"]).then(() => { if (!S.vulnProgress.error) S.vulnProgress = null; show(); });
+  });
 }
 
 const liveRefresh = debounce(async () => {

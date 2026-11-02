@@ -19,7 +19,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from kekkai.detect.engine import Finding
-from kekkai.intel.nvd import NVD, cpe23, severity_from_score, vendor_product
+from kekkai.intel.nvd import NOTICE as NVD_NOTICE, NVD, cpe23, severity_from_score, vendor_product
 from kekkai.netutil import is_local_target
 
 SEV = ["info", "low", "medium", "high", "critical"]
@@ -273,7 +273,8 @@ def assess(m: Any, nvd: Optional[NVD] = None, scan_devices: bool = False,
     items.sort(key=lambda i: (_rank(i.get("severity")), bool(i.get("exploited")), i.get("score") or 0.0), reverse=True)
     counts = {s: sum(1 for i in items if i.get("severity") == s) for s in SEV}
     worst = next((s for s in reversed(SEV) if counts[s]), None)
-    with_services = sum(1 for d in devices if any(p.get("cpe") for p in d.get("ports") or []))
+    with_services = sum(1 for d in devices
+                        if any(cpe23(c) for p in d.get("ports") or [] for c in (p.get("cpe") or []) if isinstance(c, str)))
     vstat = m.vulns.status()
     gaps = coverage_gaps(m, vstat, nvd, devices, with_services)
     if worst:
@@ -291,7 +292,8 @@ def assess(m: Any, nvd: Optional[NVD] = None, scan_devices: bool = False,
                         "exposure_checked_at": (m.state.get("exposure") or {}).get("checked_at")},
            "sources": {"kev_version": vstat.get("kev_version"), "kev_entries": vstat.get("kev_entries"),
                        "sofa_lines": vstat.get("sofa_lines"),
-                       "nvd": "NIST NVD CVE API 2.0" if nvd is not None else None},
+                       "nvd": "NIST NVD CVE API 2.0" if nvd is not None else None,
+                       "notice": NVD_NOTICE if nvd is not None else None},
            "limits": LIMITS}
     say("診断が完了しました", 1.0)
     return res

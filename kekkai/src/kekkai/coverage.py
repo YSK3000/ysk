@@ -22,7 +22,7 @@ def _vulnscan_card(monitor, now):
     s = last.get("summary") or {}
     week = float(monitor.cfg.get("monitor.vulnscan_interval_sec", 604800))
     age = now - float(last["ts"])
-    detail = "%s に診断：%s（緊急 %d・高 %d）" % (_ago(age), s.get("label", "-"), s.get("critical", 0), s.get("high", 0))
+    detail = "%sに診断：%s（緊急 %d・高 %d）" % (_ago(age), s.get("label", "-"), s.get("critical", 0), s.get("high", 0))
     if not s.get("complete", True):
         return dict(card, state="partial", detail=detail + "。診断できていない範囲あり")
     return dict(card, state="active" if age <= week * 2 else "stale", detail=detail if age <= week * 2 else detail + "。結果が古くなっています")
@@ -38,10 +38,10 @@ def _exposure_card(monitor, now):
     age = now - float(exp["checked_at"])
     iv = float(monitor.cfg.get("monitor.exposure_interval_sec", 21600))
     if exp.get("shared_ipv4"):
-        return dict(card, state="limited", detail="%s に確認。公開IPが共有(CGNAT等)のため外部から直接は届きにくい構成" % _ago(age))
+        return dict(card, state="limited", detail="%sに確認。公開IPが共有(CGNAT等)のため外部から直接は届きにくい構成" % _ago(age))
     ports = len(((exp.get("internetdb") or {}).get("ports")) or [])
     return dict(card, state="active" if age <= iv * 3 else "stale",
-                detail="%s に確認。外から見えるポート %d 件・新たな公開は即警告" % (_ago(age), ports))
+                detail="%sに確認。外から見えるポート %d 件・新たな公開は即警告" % (_ago(age), ports))
 
 
 def _leaks_card(monitor):

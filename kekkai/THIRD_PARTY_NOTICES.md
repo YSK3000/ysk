@@ -65,3 +65,7 @@ OR OTHER DEALINGS IN THE SOFTWARE.
 | Tor exits | The Tor Project | public |
 | Malicious domains (sensor) | HaGeZi Threat Intelligence Feeds (mini) | GPL-3.0 (used as data, not bundled) |
 | Exposure | Shodan InternetDB | free for non-commercial use |
+| Known exploited vulnerabilities | CISA KEV catalog (fallback: CISA's GitHub mirror) | public data published by the U.S. Government (CISA) |
+| macOS security releases | SOFA by Mac Admins Open Source (sofafeed.macadmins.io, fallback: GitHub) | per the project's license: https://github.com/macadmins/sofa |
+| CVEs for a product version (脆弱性診断) | NIST National Vulnerability Database, CVE API 2.0 | Public domain. "This product uses the NVD API but is not endorsed or certified by the NVD." |
+| Ransomware leak-site listings | Ransomware.live API v2 | personal use, attribution required (shown) |

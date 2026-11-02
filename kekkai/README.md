@@ -16,6 +16,7 @@ Kali Linux の定番ツール（nmap / netdiscover / arpwatch / tcpdump / Snort 
 | 🛡 **侵入検知** | ARPスプーフィング（中間者攻撃）、脅威リスト掲載IPとの通信、一時フォルダから動く未署名プログラム、新しい自動起動項目、DNS/プロキシの書き換えなど | arpwatch / Snort / KnockKnock |
 | 📡 **パケットセンサー**（任意） | `sudo` で起動すると、このMacへのポートスキャン、LAN内の偵察（ARPスキャン）、ルーターなりすまし、危険ドメインへの名前解決をリアルタイム検知 | tcpdump / Snort |
 | ✅ **セキュリティ診断** | ファイアウォール・FileVault・SIP・Gatekeeper・自動アップデート・共有設定・Wi-Fi暗号化・バックアップ等を採点 | Lynis |
+| 🩻 **脆弱性診断** | このMac（macOSの版×Appleの更新情報）・LAN機器のサービス（nmapで特定した版×米国NISTのNVD）・機器の型番・公開IPのCVEを照合し、実際に悪用された脆弱性（CISA KEV）を優先して、直し方つきで一覧化。週1回自動。診断できていない範囲も明示 | OpenVAS / Nessus（守る側に限定） |
 | 👁 **外部露出チェック** | 「インターネットから自宅がどう見えるか」を Shodan InternetDB で確認。ルーターの UPnP ポート開放も一覧化 | Shodan |
 | 🤖 **AIアナリスト** | アラートを日本語で解説し、具体的な対処手順を提案。**ローカルLLM（Ollama / LM Studio）ならデータがMacの外に出ません**。Claude も利用可 | — |
 | 🧩 **Claude 連携** | MCPサーバー内蔵。Claude Code / Claude Desktop から「うちのネットワーク大丈夫？」と聞けます | — |
@@ -112,11 +113,13 @@ sudo ./kekkai install-sensor         パケットセンサーを常時監視に�
 ./kekkai alerts [--all]              アラート一覧
 ./kekkai audit [--detailed]          セキュリティ診断（--detailed で未適用アップデートも確認）
 ./kekkai exposure                    インターネットから見た自宅
-./kekkai portscan 192.168.1.20 [--deep]  LAN内機器のポートスキャン（プライベートIPのみ）
+./kekkai portscan 192.168.1.20 [--deep|--tcp]  LAN内機器のポートスキャン（プライベートIPのみ。nmapがあれば自動で版も特定）
+./kekkai vulnscan [--no-scan] [--offline]  脆弱性診断（このMac・LANの機器・公開IP。高以上があれば終了コード3）
 ./kekkai lookup 1.2.3.4 [--external] IPの照会（GeoIP・脅威リスト・Shodan/GreyNoise）
 ./kekkai report [--out report.md]    Markdownレポート（家族やAIへの相談用）
 ./kekkai update [--force]            GeoIP・脅威リストの更新（自動でも12時間ごと）
 ./kekkai leaks [--target 語...]       自分のドメイン・組織名が暴露サイトに載っていないか確認
+./kekkai leaks --search 会社名 / --country JP   暴露サイトの被害組織を検索・国別の最近の被害（公開情報のみ）
 ./kekkai onion <URL> [--find 語...]  .onion のページを Tor 経由で読む（要 tor、文字情報のみ）
 ./kekkai doctor                      自己診断
 sudo ./kekkai sensor                 パケットセンサーをこのターミナルで動かす（常時監視を使わない場合）

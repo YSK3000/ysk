@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from kekkai.util import FetchError, http_get
 
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+NOTICE = "This product uses the NVD API but is not endorsed or certified by the NVD."
 RATE_GAP = 6.5        # seconds between requests without a key (5 per 30 s, with margin)
 RATE_GAP_KEY = 0.7    # with a key (50 per 30 s)
 CACHE_TTL = 86400
@@ -99,10 +100,12 @@ def parse(body: bytes) -> Tuple[List[Dict[str, Any]], int]:
     """NVD CVE API 2.0 response -> compact CVE records (rejected CVEs dropped), most severe first."""
     data = json.loads(body.decode("utf-8", "replace"))
     out = []
+    dropped = 0
     for v in data.get("vulnerabilities") or []:
         c = (v or {}).get("cve") or {}
         cid = str(c.get("id") or "")
         if not cid.startswith("CVE-") or str(c.get("vulnStatus") or "").lower() == "rejected":
+            dropped += 1
             continue
         score, sev, ver = _score(c)
         desc = next((d.get("value") for d in c.get("descriptions") or []
@@ -112,10 +115,10 @@ def parse(body: bytes) -> Tuple[List[Dict[str, Any]], int]:
                     "published": str(c.get("published") or "")[:10], "summary": desc[:240]})
     out.sort(key=lambda r: (r["kev"], r["score"] or 0.0), reverse=True)
     try:
-        total = int(data.get("totalResults") or len(out))
+        total = int(data.get("totalResults") or len(out)) - dropped  # rejected entries are not vulnerabilities
     except (TypeError, ValueError):
         total = len(out)
-    return out, total
+    return out, max(total, len(out))
 
 
 class NVD:

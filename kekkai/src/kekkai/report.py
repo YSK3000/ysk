@@ -110,6 +110,8 @@ def markdown(m: Any, max_alerts: int = 30) -> str:
                 " / " + ids if ids else "", i.get("confidence", "-"), i.get("fix", "")))
         for g in vs.get("gaps") or []:
             lines.append("- 未診断: %s" % g)
+        if (vs.get("sources") or {}).get("notice"):
+            lines.append("- %s" % vs["sources"]["notice"])
         lines.append("")
     lines.append("---")
     lines.append("IP Geolocation by DB-IP (CC BY 4.0) / 脅威情報: abuse.ch, Spamhaus, FireHOL, Emerging Threats, CINS, Tor Project")

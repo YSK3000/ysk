@@ -59,7 +59,7 @@ class ParseTest(unittest.TestCase):
         self.assertEqual((by["CVE-2099-1001"]["score"], by["CVE-2099-1001"]["severity"]), (9.8, "critical"))
         self.assertEqual(by["CVE-2099-1003"]["severity"], "medium")  # v2 keeps severity outside cvssData
         self.assertTrue(by["CVE-2099-1001"]["summary"].startswith("Test entry"))  # English description chosen
-        self.assertEqual(total, 4)
+        self.assertEqual(total, 3)                             # the rejected entry is not counted
 
 
 class ClientTest(unittest.TestCase):
@@ -184,7 +184,7 @@ class AssessTest(unittest.TestCase):
         self.assertEqual(len(svc), 1)
         self.assertEqual(svc[0]["severity"], "critical")       # KEV-listed and CVSS 9.8 present
         self.assertEqual(svc[0]["exploited"], ["CVE-2099-1002"])
-        self.assertEqual(svc[0]["cve_count"], 4)
+        self.assertEqual(svc[0]["cve_count"], 3)                  # rejected CVE not counted
         self.assertEqual(cfg[0]["port"], 23)
         self.assertEqual(res["items"][0]["category"], "service")  # most severe first
         self.assertEqual(res["summary"]["worst"], "critical")
@@ -223,6 +223,13 @@ class AssessTest(unittest.TestCase):
         self.m.nvd_client = lambda use_nvd=None: FakeNVD()
         self.m.run_vulnscan(scan_devices=False)
         self.assertTrue(self.m.vulnscan_cycle()["skipped"])
+
+    def test_versionless_cpe_does_not_count_as_identified(self):
+        self.store.upsert_device("net1", "aa:bb:cc:00:00:02", "192.168.1.30", vendor="Cam", kind="camera")
+        self.store.set_device_ports("net1", "aa:bb:cc:00:00:02", [
+            {"port": 80, "service": "http", "risk": "info", "cpe": ["cpe:/a:lighttpd:lighttpd"]}])
+        res = vulnscan.assess(self.m, nvd=FakeNVD())
+        self.assertEqual((res["coverage"]["devices"], res["coverage"]["with_versions"]), (2, 1))
 
     def test_blind_spots_are_never_reported_as_clean(self):
         self.store.set_device_ports("net1", "aa:bb:cc:00:00:01", [])   # nothing to find
