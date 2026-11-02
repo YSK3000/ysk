@@ -174,6 +174,11 @@ class App:
             with m.lock:
                 return {"result": m.state.get("vulnscan"), "running": bool(m.state.get("vulnscan_running")),
                         "nmap": bool(m._deep_available())}
+        if path == "/api/tools":
+            from kekkai import tools
+            with m.lock:
+                inst = dict(m.state.get("nmap_install") or {})
+            return {"nmap": dict(tools.nmap_status(), install=inst)}
         if path == "/api/report":
             from kekkai import report
             return {"markdown": report.markdown(m)}
@@ -242,6 +247,18 @@ class App:
             threading.Thread(target=_quiet(lambda: m.run_vulnscan(scan_devices=None if scan is None else bool(scan))),
                              daemon=True, name="kekkai-vulnscan").start()
             return {"started": True}
+        if path == "/api/tools/nmap/install":
+            from kekkai import tools
+            if m.state.get("nmap_install", {}).get("running"):
+                raise ApiError(409, "nmap を導入中です")
+            st = tools.nmap_status()
+            if not st["supported"]:
+                raise ApiError(400, "macOS 専用です")
+            if st["installed"]:
+                return {"started": False, "already": True, "path": st["path"], "version": st["version"]}
+            threading.Thread(target=_quiet(m.install_nmap), daemon=True, name="kekkai-install-nmap").start()
+            return {"started": True, "method": st["method"], "needs_password": st["needs_password"],
+                    "needs_rosetta": st["needs_rosetta"]}
         if path == "/api/intel/update":
             threading.Thread(target=_quiet(lambda: m.intel_cycle(force=bool(body.get("force")))), daemon=True).start()
             return {"started": True}

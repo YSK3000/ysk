@@ -236,7 +236,7 @@ def coverage_gaps(m: Any, vstat: Dict[str, Any], nvd: Optional[NVD], devices: Li
     elif m.platform.name == "macos" and not m._safe("os_version", m.platform.os_version, None):
         gaps.append("このMacのmacOSの版を取得できませんでした。")
     if not m._deep_available():
-        gaps.append("nmap が無いため機器のサービスの版を特定できていません（brew install nmap）。")
+        gaps.append("nmap が無いため機器のサービスの版を特定できていません（「nmapを入れる」で導入できます）。")
     elif devices and not with_versions:
         gaps.append("版を特定できた機器がありません（機器のスキャン前か、版を返さない機器です）。")
     if nvd is None:

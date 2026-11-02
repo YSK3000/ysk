@@ -1,4 +1,5 @@
 """Evidence-based defense coverage; installation is never treated as active protection."""
+import sys
 import time
 from pathlib import Path
 from kekkai.util import find_cmd
@@ -52,6 +53,21 @@ def _leaks_card(monitor):
     return dict(card, state="active", detail="%d 件の語を毎日照合。一致 %d 件" % (len(lk.get("targets") or []), lk.get("match_count") or 0))
 
 
+def _nmap_card(monitor, nmap: bool):
+    inst = (getattr(monitor, "state", {}) or {}).get("nmap_install") or {}
+    card = {"id": "nmap", "label": "Nmap 詳細診断", "url": "https://nmap.org/download.html",
+            "action": "自分が管理する機器のサービスを確認"}
+    if nmap:
+        return dict(card, state="available", detail="利用可能。LAN機器のサービスと版を特定し、脆弱性診断で使用")
+    if inst.get("running"):
+        return dict(card, state="installing", detail="導入中: %s" % (inst.get("message") or ""))
+    last = inst.get("result") or {}
+    detail = "未導入。機器のサービスの版を調べられず、脆弱性診断が不完全になります（標準のTCPスキャンのみ）"
+    if last and not last.get("ok"):
+        detail = "未導入（前回の導入は失敗: %s）" % last.get("error", "")
+    return dict(card, state="unavailable", detail=detail, installable=sys.platform == "darwin")
+
+
 def describe(monitor):
     now = time.time()
     state = monitor.monitoring_status()
@@ -73,9 +89,7 @@ def describe(monitor):
         {"id": "sensor", "label": "パケット侵入検知", "state": "active" if capturing else "inactive",
          "detail": "センサーの生存信号あり" if capturing else "センサー未稼働。パケット検知は動いていません",
          "action": "必要な場合に権限付きのセンサーを起動"},
-        {"id": "nmap", "label": "Nmap 詳細診断", "state": "available" if nmap else "unavailable",
-         "detail": "利用可能。LAN機器の詳細スキャンで使用" if nmap else "未導入。標準のTCPスキャンは利用可能",
-         "action": "自分が管理する機器のサービスを確認", "url": "https://nmap.org/download.html"},
+        _nmap_card(monitor, nmap),
         _vulnscan_card(monitor, now),
         _exposure_card(monitor, now),
         _leaks_card(monitor),

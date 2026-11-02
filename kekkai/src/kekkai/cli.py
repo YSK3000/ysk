@@ -123,6 +123,10 @@ def cmd_setup(a: argparse.Namespace) -> int:
         print("  [+]   脆弱性DB     …", ", ".join("%s=%s" % kv for kv in vulns.update(force=a.force).items()))
         rep = FeedSet().update(cfg.get("intel.feeds"), force=True)
         print("  [4/4] 脅威フィード …", ", ".join("%s=%s" % kv for kv in rep.items()))
+        from kekkai import tools
+        if IS_MACOS and not tools.nmap_status()["installed"] and sys.stdin.isatty():
+            print("\n  nmap（LAN機器のサービスと版を特定し、脆弱性診断の精度を上げる）が入っていません。")
+            cmd_install_nmap(argparse.Namespace(method=None, yes=False, json=False))
     print("\n  自己診断:")
     worst = doctor.print_report(doctor.run_checks(cfg, quick=True), COLOR)
     if not IS_MACOS or a.no_agent:
@@ -143,6 +147,40 @@ def cmd_setup(a: argparse.Namespace) -> int:
         print("\n  仕上げ（推奨）: sudo ./kekkai install-sensor")
         print("    ポートスキャン・ARP偽装・危険ドメインへのアクセスを、Macの起動中ずっとリアルタイムで検知します")
     return 0 if worst < 2 else 1
+
+
+def cmd_install_nmap(a: argparse.Namespace) -> int:
+    from kekkai import tools
+    st = tools.nmap_status()
+    if not st["supported"]:
+        print("macOS 専用です（Linux はディストリビューションのパッケージで nmap を入れてください）")
+        return 2
+    if st["installed"] and not a.method:
+        print("  nmap は導入済みです: %s（%s）" % (st["version"], st["path"]))
+        return 0
+    method = a.method or st["method"]
+    if method == "brew":
+        print("  Homebrew で nmap を入れます（パスワード不要・1〜5分）。")
+    else:
+        print("  nmap.org 公式のインストーラーで nmap を入れます。")
+        print("   ・公式サイトから取得し、公式が公開している SHA-256 と照合します（不一致なら中止）")
+        print("   ・macOS のパスワード入力画面が出ます（パスワードは macOS に渡り、KEKKAI は見ません）")
+        print("   ・入るのは nmap だけです（Zenmap などの付属アプリは入れません）")
+        if st["needs_rosetta"]:
+            print("   ・nmap 公式版は Intel 用のため、Apple の Rosetta 2 も入ります（Appleの使用許諾に同意したことになります）")
+    if not a.yes:
+        if not sys.stdin.isatty():
+            print("  確認できないため中止しました（--yes で実行）")
+            return 2
+        if input("  続けますか？ [Y/n] ").strip().lower() not in ("", "y", "yes"):
+            print("  中止しました")
+            return 1
+    res = tools.install_nmap(progress=lambda msg: print("  …", msg), prefer=method)
+    for line in tools.describe_result(res):
+        print("  " + line)
+    if a.json:
+        print(dumps(res, indent=2))
+    return 0 if res.get("ok") else 1
 
 
 def cmd_update(a: argparse.Namespace) -> int:
@@ -329,7 +367,7 @@ def cmd_vulnscan(a: argparse.Namespace) -> int:
             if not quiet:
                 print("  外部露出の確認に失敗しました: %s" % e)
     if not a.no_scan and not m._deep_available() and not quiet:
-        print("  ※ nmap が無いため機器のサービスの版を特定できません（brew install nmap で精度が上がります）")
+        print("  ※ nmap が無いため機器のサービスの版を特定できません（./kekkai install-nmap で入れると精度が上がります）")
     try:
         res = m.run_vulnscan(scan_devices=not a.no_scan, use_nvd=False if a.offline else None, progress=say)
     except RuntimeError as e:
@@ -614,6 +652,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--ports", help="例: 22,80,443（内蔵スキャナ）")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_portscan)
+    s = sub.add_parser("install-nmap", help="nmap（詳細診断）を公式の配布元から入れる（macOS）")
+    s.add_argument("--method", choices=("brew", "pkg"), help="brew=Homebrew / pkg=nmap.org 公式インストーラー（既定: 自動）")
+    s.add_argument("--yes", action="store_true", help="確認せずに実行")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_install_nmap)
     s = sub.add_parser("vulnscan", help="脆弱性診断（このMac・自宅LANの機器・公開IP）")
     s.add_argument("--no-scan", action="store_true", help="nmapで機器を新たにスキャンせず、保存済みの情報で診断")
     s.add_argument("--offline", action="store_true", help="外部(NVD・Shodan)に問い合わせない")

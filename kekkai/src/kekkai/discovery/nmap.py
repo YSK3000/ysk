@@ -1,4 +1,4 @@
-"""Optional deep scan with nmap (brew install nmap) — same LAN-only guard as the built-in scanner."""
+"""Optional deep scan with nmap (installed by `kekkai install-nmap`) — same LAN-only guard as the built-in scanner."""
 from __future__ import annotations
 
 import time
@@ -47,7 +47,7 @@ def parse_xml(text: str) -> List[Dict[str, Any]]:
 def scan(ip: str, top_ports: int = 200, timeout: float = 240) -> Dict[str, Any]:
     _check_scope(ip)
     if not available():
-        raise RuntimeError("nmap が見つかりません（brew install nmap）")
+        raise RuntimeError("nmap が見つかりません（防御機能の稼働状況の「nmapを入れる」か ./kekkai install-nmap）")
     t0 = time.time()
     rc, out, err = run(["nmap", "-sV", "--version-light", "-T4", "-Pn", "--top-ports", str(top_ports),
                         "-oX", "-", "--", ip], timeout=timeout)

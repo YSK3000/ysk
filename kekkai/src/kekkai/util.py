@@ -34,6 +34,8 @@ _EXTRA_PATHS = (
     "/opt/homebrew/sbin",
     "/usr/local/bin",
     "/usr/local/sbin",
+    # nmap.org's official macOS installer (7.99x) installs an app bundle, not /usr/local/bin/nmap
+    "/Applications/nmap.app/Contents/MacOS",
 )
 
 

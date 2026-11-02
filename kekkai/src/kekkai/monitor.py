@@ -105,6 +105,8 @@ class Monitor:
         self._load_home()
         self.state["vulnscan"] = self.store.kv_get("vulnscan_last")
         self.state["vulnscan_running"] = False
+        self.state["nmap_install"] = {"running": False, "message": None, "result": None}
+        self._install_nmap = None  # injection point for tests (defaults to kekkai.tools.install_nmap)
 
     # ------------------------------------------------------------ helpers
     def _health(self, name: str, ok: bool, duration: float, error: Optional[str] = None) -> None:
@@ -637,6 +639,30 @@ class Monitor:
             with self.lock:
                 self.state["vulnscan_running"] = False
 
+    def install_nmap(self, method: Optional[str] = None) -> Dict[str, Any]:
+        """Install nmap from an official source (asked for from the dashboard); progress goes to the bus."""
+        from kekkai import tools
+        with self.lock:
+            if self.state["nmap_install"].get("running"):
+                raise RuntimeError("nmap を導入中です")
+            self.state["nmap_install"] = {"running": True, "message": "準備しています…", "result": None}
+
+        def say(msg: str) -> None:
+            with self.lock:
+                self.state["nmap_install"]["message"] = msg
+            self.bus.publish("tools", {"tool": "nmap", "running": True, "message": msg})
+        say("準備しています…")
+        res: Dict[str, Any] = {"ok": False, "error": "不明なエラー"}
+        try:
+            res = (self._install_nmap or tools.install_nmap)(progress=say, prefer=method)
+            return res
+        finally:
+            with self.lock:
+                self.state["nmap_install"] = {"running": False, "message": None, "result": dict(res, ts=time.time())}
+            self.store.log_event("tools", ("nmap を導入: %s %s" % (res.get("version") or "", res.get("method") or ""))
+                                 if res.get("ok") else "nmap の導入に失敗: %s" % res.get("error"))
+            self.bus.publish("tools", {"tool": "nmap", "running": False, "result": res})
+
     def vulnscan_cycle(self) -> Dict[str, Any]:
         """Weekly background assessment; skipped while a recent one exists (the monitor restarts at login)."""
         last = self.state.get("vulnscan") or {}
@@ -714,7 +740,7 @@ class Monitor:
             raise ScopeError("LAN内(プライベートIP)のみスキャンできます")
         mode = self.resolve_scan_mode(mode)
         if mode == "deep" and not self._deep_available():
-            raise RuntimeError("詳細スキャンには nmap が必要です（brew install nmap）")
+            raise RuntimeError("詳細スキャンには nmap が必要です（防御機能の稼働状況の「nmapを入れる」）")
         running = [j for j in self.jobs.values() if j["status"] == "running"]
         if len(running) >= 3:
             raise RuntimeError("同時に実行できるスキャンは3件までです")

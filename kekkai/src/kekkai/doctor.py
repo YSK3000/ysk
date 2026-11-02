@@ -57,7 +57,7 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
     missing = [t for t in need if not find_cmd(t)]
     if need:
         out.append(_c("必須コマンド", "fail" if missing else "ok", "不足: " + ", ".join(missing) if missing else "すべて利用可能"))
-    opt = {"nmap": "詳細スキャン (brew install nmap)", "tcpdump": "パケットセンサー", "codesign": "署名チェック",
+    opt = {"nmap": "詳細スキャン (./kekkai install-nmap)", "tcpdump": "パケットセンサー", "codesign": "署名チェック",
            "lsof": "プロセス特定の補助"}
     have = [k for k in opt if find_cmd(k)]
     lack = [k for k in opt if not find_cmd(k)]

@@ -31,7 +31,7 @@ const S = {
   posture: null, wifi: null, persistence: [], exposure: null, upnp: null, intel: null, ai: null, doctor: null,
   history: [], view: null, selectedMac: null, alertFilter: "active", trafficFilter: "internet", trafficQuery: "",
   reachable: false, geoHistory: false, geoRiskOnly: false, sse: false, lastConnFetch: 0, lastDevFetch: 0, aiBusy: {}, jobs: {},
-  vulnscan: null, vulnProgress: null, vulnFilter: "all",
+  vulnscan: null, vulnProgress: null, vulnFilter: "all", nmapInstall: null,
 };
 
 const UI = {};
@@ -176,6 +176,42 @@ function kv(rows) {
     [h("dt", null, k), h("dd", null, v)]));
 }
 
+// nmap is optional but makes the vulnerability check complete: offer to install it from an official source.
+function nmapInstallControl() {
+  const st = S.nmapInstall || {};
+  if (st.running) {
+    return h("div", { class: "nmap-install" }, button("導入中…", { icon: "target", disabled: true }),
+      h("p", { class: "small", role: "status" }, st.message || "nmap を導入しています…"));
+  }
+  const btn = button("nmapを入れる", {
+    icon: "target", cls: "primary", title: "公式の配布元（Homebrew または nmap.org）から nmap を入れます",
+    onclick: async () => {
+      let info = {};
+      try { info = ((await api("/api/tools")) || {}).nmap || {}; } catch (_) { /* fall back to generic text */ }
+      if (info.installed) { S.nmapInstall = { ok: true, message: `nmap ${info.version || ""} は導入済みです` }; refresh(["coverage", "vulnscan"]).then(() => current && current.update()); return; }
+      const lines = info.method === "brew"
+        ? ["Homebrew で nmap を入れます（パスワード不要・1〜5分）。"]
+        : ["nmap.org 公式のインストーラーで nmap を入れます（数分）。",
+           "・公式が公開している SHA-256 と照合し、一致しなければ中止します",
+           "・macOS のパスワード入力画面が出ます（パスワードは macOS に渡り、KEKKAI は見ません）",
+           "・入るのは nmap だけです（Zenmap などの付属アプリは入れません）"]
+          .concat(info.needs_rosetta ? ["・nmap 公式版は Intel 用のため、Apple の Rosetta 2 も入ります（Apple の使用許諾への同意を含みます）"] : []);
+      if (!window.confirm(lines.join("\n") + "\n\n続けますか？")) return;
+      S.nmapInstall = { running: true, message: "開始しています…" };
+      if (current) current.update();
+      try {
+        const r = await post("/api/tools/nmap/install", {});
+        if (r && r.already) S.nmapInstall = { ok: true, message: `nmap ${r.version || ""} は導入済みです` };
+      } catch (e) {
+        S.nmapInstall = { running: false, error: String((e && e.message) || e) };
+      }
+      if (current) current.update();
+    } });
+  return h("div", { class: "nmap-install" }, btn,
+    st.error ? h("p", { class: "danger small", role: "alert" }, st.error) : null,
+    st.ok ? h("p", { class: "small", role: "status" }, st.message) : null);
+}
+
 function toast(alert) {
   const el = h("div", { class: ["toast", `sev-b-${alert.severity}`], role: "status",
                          onclick: () => { location.hash = "#alerts"; el.remove(); } },
@@ -296,6 +332,7 @@ Views.command = {
     if (S.coverage) {
       add(this.coverage, h("div", { class: "coverage-grid" }, S.coverage.cards.map((card) =>
         h("div", { class: "coverage-card" }, h("b", null, card.label), card.id === "connections" ? (UI.connectionCoverage = h("p", null, monitorView(sm, S.reachable).label)) : h("p", null, card.detail),
+          card.id === "nmap" && (card.installable || card.state === "installing" || (S.nmapInstall && (S.nmapInstall.running || S.nmapInstall.error))) ? nmapInstallControl() : null,
           card.url ? h("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" }, "公式サイト") : h("span", { class: "muted small" }, card.action)))),
         h("p", { class: "muted small" }, S.coverage.limits.join(" ")));
     }
@@ -764,7 +801,7 @@ Views.vuln = {
     if (!r) {
       if (!running) this.sum.appendChild(empty("まだ診断していません", v.nmap
         ? "「今すぐ診断」で、このMac・LANの機器・公開IPを確認します"
-        : "「今すぐ診断」で開始します。nmap を入れると機器のサービスの版まで調べられます（brew install nmap）"));
+        : "「今すぐ診断」で開始します。nmap を入れると機器のサービスの版まで調べられます"));
     } else {
       const s = r.summary || {};
       const cov = r.coverage || {};
@@ -778,11 +815,12 @@ Views.vuln = {
           h("li", { class: `vc-${k}` }, h("b", null, String(s[k] || 0)), h("span", null, SEV_JA[k])))),
         s.exploited ? h("p", { class: "vuln-expl" }, icon("alerts"), `実際に悪用が確認された脆弱性を含む項目: ${s.exploited} 件`) : null,
         kv([["対象の機器", `${cov.devices || 0} 台（版を特定 ${cov.with_versions || 0} 台）`],
-            ["nmap", cov.nmap ? "あり（サービスの版を特定）" : "なし（brew install nmap）"],
+            ["nmap", cov.nmap ? "あり（サービスの版を特定）" : "なし（機器の版は未特定）"],
             ["NVD照合", cov.nvd ? `${cov.nvd_queried || 0} 回（キャッシュ ${cov.nvd_cache_hits || 0} 件）${cov.nvd_rate_limited ? "・回数制限で一部未照合" : ""}`
                                 : "オフライン（製品名でKEV照合のみ）"],
             ["データ", `CISA KEV ${src.kev_version || "未取得"}・Apple更新情報 ${src.sofa_lines || 0} 系列`]]));
     }
+    if (!running && (!v.nmap || (S.nmapInstall && S.nmapInstall.ok))) this.sum.appendChild(nmapInstallControl());
     clear(this.gaps);
     const gaps = (r && r.gaps) || [];
     this.gapPanel.hidden = !gaps.length;
@@ -988,6 +1026,19 @@ function connectSSE() {
   });
   es.addEventListener("posture", () => { if (current && current.id === "audit") refresh(["posture"]).then(() => current.update()); loadSummary(); });
   es.addEventListener("scan", () => { if (current && current.id === "lan") refresh(["devices"]).then(() => current.update()); });
+  es.addEventListener("tools", (e) => {
+    let d;
+    try { d = JSON.parse(e.data); } catch (_) { return; }
+    if (d.tool !== "nmap") return;
+    if (d.running) S.nmapInstall = { running: true, message: d.message };
+    else {
+      const r = d.result || {};
+      S.nmapInstall = r.ok ? { ok: true, message: `nmap ${r.version || ""} を使えるようになりました。「今すぐ診断」で機器の版まで調べられます` }
+                           : { error: r.error || "nmap を入れられませんでした" };
+    }
+    const show = () => { if (current && (current.id === "vuln" || current.id === "command")) current.update(); };
+    if (d.running) show(); else refresh(["coverage", "vulnscan"]).then(show);
+  });
   es.addEventListener("vulnscan", (e) => {
     try { S.vulnProgress = JSON.parse(e.data); } catch (_) { return; }
     const show = () => { if (current && current.id === "vuln") current.update(); };

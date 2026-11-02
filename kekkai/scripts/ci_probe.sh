@@ -3,7 +3,7 @@
 #  1) Tor: 公式の tor を入れて起動し、Tor Project 公式の onion 一覧にある .onion を KEKKAI で読めるか（必須）
 #  2) ransomware.live API v2 の実際の応答（記録のみ）
 #  3) sfltool dumpbtm の実際の出力（ログイン項目の監視の準備、記録のみ）
-#  4) nmap: 公式の nmap を入れて、KEKKAI の詳細スキャン(-sV)が実機で動くか（必須）
+#  4) nmap: KEKKAI の install-nmap（Homebrew 経由）で入れて、詳細スキャン(-sV)が実機で動くか（必須）
 #  5) NVD: 米国NISTの脆弱性DBに実際に問い合わせ、KEKKAIの解析器でCVEが取れるか（必須）
 #  6) 脆弱性診断: このランナーの仮想LANで vulnscan を通しで実行（必須）
 set -u
@@ -56,7 +56,8 @@ sudo sfltool dumpbtm > /tmp/btm.txt 2>&1; echo "rc=$? lines=$(wc -l < /tmp/btm.t
 head -90 /tmp/btm.txt
 
 echo "==== 4) nmap deep scan (service/version detection, LAN-only guard on 127.0.0.1)"
-brew install nmap > /dev/null 2>&1 || { echo "FAIL: brew install nmap"; exit 1; }
+# KEKKAI's own installer (Homebrew route on this runner) — the same code the dashboard button runs
+PYTHONPATH=src "$PY" -m kekkai install-nmap --method brew --yes || { echo "FAIL: kekkai install-nmap (brew)"; exit 1; }
 nmap --version | head -1
 NMAP_OUT=$(mktemp)
 if PYTHONPATH=src "$PY" -m kekkai portscan 127.0.0.1 --deep --json > "$NMAP_OUT"; then
