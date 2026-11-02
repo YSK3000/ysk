@@ -41,6 +41,18 @@ jobs:
       - name: dashboard monitoring state tests
         run: node tests/test_health_ui.mjs
 
+  probe-installer:
+    name: probe nmap.org installer and macOS UI strings (temporary)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: kekkai
+    steps:
+      - uses: actions/checkout@v5
+      - name: nmap.org macOS installer and Japanese UI strings (record only)
+        run: bash scripts/ci_probe_installer.sh
+
   macos-smoke:
     name: macOS real-machine smoke (Apple python3)
     runs-on: macos-latest
