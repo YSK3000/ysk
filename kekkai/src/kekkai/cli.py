@@ -96,9 +96,67 @@ def _serve_live(a: argparse.Namespace) -> int:
     return 0
 
 
+def _running_version(timeout: float = 2.0) -> Optional[str]:
+    """Version reported by the dashboard listening now (None when none answers)."""
+    import json
+    import urllib.request
+    try:
+        with open(str(paths.sub("session.json")), "r", encoding="utf-8") as f:
+            sess = json.load(f)
+        req = urllib.request.Request("http://127.0.0.1:%d/api/summary" % int(sess["port"]),
+                                     headers={"Authorization": "Bearer " + sess["token"]})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback: never via a proxy
+        with opener.open(req, timeout=timeout) as resp:
+            return json.loads(resp.read(1 << 20)).get("version")
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _code_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def refresh_agent(wait: float = 45.0) -> Optional[str]:
+    """Make the login agent run this copy of KEKKAI.
+
+    Replacing KEKKAI.app does not restart the background monitor, so it would keep serving the old code
+    (and the new dashboard's buttons would hit endpoints the old server lacks). Re-register the agent when
+    it points at another copy, restart it when it runs another version. Returns what was done, or None.
+    """
+    if not IS_MACOS or not os.path.exists(_agent_path()):
+        return None
+    try:
+        with open(_agent_path(), "rb") as f:
+            agent_root = (plistlib.load(f).get("EnvironmentVariables") or {}).get("PYTHONPATH")
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        agent_root = None
+    from kekkai import server, service
+    running = _running_version()
+    if agent_root != _code_root():
+        did = "moved"
+        cmd_install_agent(argparse.Namespace())
+    elif running and running != __version__:
+        did = "restarted"
+        rc, _, err = run(["launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), AGENT_LABEL)], timeout=30)
+        if rc != 0:
+            service.bootstrap("gui/%d" % os.getuid(), _agent_path(), AGENT_LABEL)
+    else:
+        return None
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        if server.session_alive() and _running_version() == __version__:
+            break
+        time.sleep(0.5)
+    return did
+
+
 def cmd_open(a: argparse.Namespace) -> int:
     from kekkai import server
     from kekkai.platforms import get_platform
+    did = refresh_agent()
+    if did:
+        print("監視を新しい版（%s）に切り替えました（%s）" % (__version__, {"moved": "このアプリで自動起動を再登録",
+                                                                    "restarted": "古い版を再起動"}[did]))
     url = server.session_url() if server.session_alive() else None
     if not url:
         print("ダッシュボードが起動していません: ./kekkai setup（自動起動の登録）または ./kekkai serve")

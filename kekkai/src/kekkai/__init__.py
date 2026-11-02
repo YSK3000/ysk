@@ -3,6 +3,6 @@
 Pure Python standard library, Python 3.9+.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 APP_NAME = "KEKKAI"
 USER_AGENT = "KEKKAI/%s (home network defense console)" % __version__

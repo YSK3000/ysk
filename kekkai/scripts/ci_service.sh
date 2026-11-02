@@ -32,6 +32,20 @@ with opener.open(req, timeout=5) as r:
     body = json.load(r)
 print("PASS auto-started dashboard answers: HTTP %d, threat=%s" % (r.status, body["threat"]["label"]))
 PY
+# 1b) KEKKAI.app を新しい版に入れ替えた想定: 別の場所にある「版を上げたコピー」から open すると、
+#     裏の監視（LaunchAgent）がそのコピー・その版に切り替わる。元のコピーから open すると戻る。
+running() { $PY -c "import sys; sys.path.insert(0, 'src'); from kekkai import cli; print(cli._running_version())"; }
+NEW="$(mktemp -d)/kekkai-new"
+mkdir -p "$NEW" && cp -R kekkai src "$NEW/" || fail "copy"
+sed -i '' 's/^__version__ = .*/__version__ = "9.9.9"/' "$NEW/src/kekkai/__init__.py"
+( cd "$NEW" && ./kekkai open ) > /tmp/kekkai-open.txt 2>&1; cat /tmp/kekkai-open.txt
+grep -q "切り替えました" /tmp/kekkai-open.txt || fail "open from the new copy did not switch the agent"
+[ "$(running)" = "9.9.9" ] || fail "running version is $(running), expected 9.9.9"
+plutil -extract EnvironmentVariables.PYTHONPATH raw "$HOME/Library/LaunchAgents/com.kekkai.monitor.plist" | grep -q "kekkai-new/src" \
+  || fail "agent still points at the old copy"
+./kekkai open > /tmp/kekkai-open2.txt 2>&1; cat /tmp/kekkai-open2.txt
+[ "$(running)" = "$($PY -c "import sys; sys.path.insert(0, 'src'); import kekkai; print(kekkai.__version__)")" ] || fail "did not switch back"
+echo "PASS replacing the app switches the background monitor to the new copy and version"
 ./kekkai uninstall-agent || fail "uninstall-agent"
 for _ in $(seq 20); do alive || break; sleep 0.5; done
 alive && fail "dashboard still running after uninstall-agent"

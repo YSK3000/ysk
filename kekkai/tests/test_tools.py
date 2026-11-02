@@ -236,5 +236,50 @@ class MonitorInstallTest(unittest.TestCase):
             self.m.install_nmap()
 
 
+
+class RefreshAgentTest(unittest.TestCase):
+    """Replacing KEKKAI.app must not leave the old background monitor serving the old code."""
+
+    def setUp(self):
+        from kekkai import cli
+        self.cli = cli
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.plist = str(Path(self.tmp.name) / "agent.plist")
+        self.calls = []
+
+    def write_agent(self, root):
+        with open(self.plist, "wb") as f:
+            plistlib.dump({"Label": "com.kekkai.monitor", "EnvironmentVariables": {"PYTHONPATH": root}}, f)
+
+    def run_refresh(self, versions):
+        seq = iter(versions)
+        with mock.patch.object(self.cli, "IS_MACOS", True), mock.patch.object(self.cli, "_agent_path", return_value=self.plist), \
+                mock.patch.object(self.cli, "_running_version", side_effect=lambda *a, **k: next(seq, self.cli.__version__)), \
+                mock.patch.object(self.cli, "run", side_effect=lambda cmd, **k: self.calls.append(cmd) or (0, "", "")), \
+                mock.patch.object(self.cli, "cmd_install_agent", side_effect=lambda a: self.calls.append(["install-agent"]) or 0), \
+                mock.patch("kekkai.server.session_alive", return_value=True):
+            return self.cli.refresh_agent(wait=2)
+
+    def test_old_version_is_restarted(self):
+        self.write_agent(self.cli._code_root())
+        self.assertEqual(self.run_refresh(["0.1.0"]), "restarted")
+        self.assertTrue(any(c[:3] == ["launchctl", "kickstart", "-k"] for c in self.calls))
+
+    def test_agent_from_another_copy_is_re_registered(self):
+        self.write_agent("/Users/me/Downloads/KEKKAI.app/Contents/Resources/kekkai/src")
+        self.assertEqual(self.run_refresh([self.cli.__version__]), "moved")
+        self.assertIn(["install-agent"], self.calls)
+
+    def test_current_version_is_left_alone(self):
+        self.write_agent(self.cli._code_root())
+        self.assertIsNone(self.run_refresh([self.cli.__version__]))
+        self.assertEqual(self.calls, [])
+
+    def test_no_agent_registered(self):
+        with mock.patch.object(self.cli, "IS_MACOS", True), mock.patch.object(self.cli, "_agent_path", return_value="/nonexistent"):
+            self.assertIsNone(self.cli.refresh_agent())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,8 +6,8 @@
   <key>CFBundleDisplayName</key>     <string>結界 KEKKAI</string>
   <key>CFBundleIdentifier</key>      <string>com.kekkai.app</string>
   <key>CFBundleExecutable</key>      <string>KEKKAI</string>
-  <key>CFBundleVersion</key>         <string>0.1.0</string>
-  <key>CFBundleShortVersionString</key> <string>0.1.0</string>
+  <key>CFBundleVersion</key>         <string>0.2.0</string>
+  <key>CFBundleShortVersionString</key> <string>0.2.0</string>
   <key>CFBundlePackageType</key>     <string>APPL</string>
   <key>LSMinimumSystemVersion</key>  <string>11.0</string>
   <key>NSHighResolutionCapable</key> <true/>

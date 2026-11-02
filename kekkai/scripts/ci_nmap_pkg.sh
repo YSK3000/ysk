@@ -102,7 +102,19 @@ t = plistlib.load(open(ext, "rb"))
 en, ja = t.get("en") or {}, t.get("ja") or {}
 print("--", ext)
 for k, v in sorted(en.items()):
-    if isinstance(v, str) and (v in ("Security", "Open Anyway", "Open", "Done", "Cancel") or "was blocked" in v or "blocked to protect" in v):
+    if isinstance(v, str) and (v in ("Security", "Open Anyway", "Open", "Done", "Cancel", "Automation", "Local Network")
+                               or "was blocked" in v or "blocked to protect" in v):
         print("  %s | en=%r | ja=%r" % (k, v, ja.get(k)))
+import glob
+for path in glob.glob("/System/Library/ExtensionKit/Extensions/*.appex/Contents/Resources/*.loctable") + \
+        ["/System/Applications/Utilities/Terminal.app/Contents/Resources/InfoPlist.loctable"]:
+    try:
+        t = plistlib.load(open(path, "rb"))
+    except Exception:
+        continue
+    en, ja = t.get("en") or {}, t.get("ja") or {}
+    for k, v in en.items():
+        if v in ("Automation", "Local Network", "Terminal") or (k == "CFBundleDisplayName" and "Terminal" in path):
+            print("  %s | %s | en=%r | ja=%r" % (path.split("/Extensions/")[-1][:60], k, v, ja.get(k)))
 PY
 echo "PASS nmap.org installer route"
