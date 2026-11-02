@@ -55,7 +55,12 @@ Kali Linux の定番ツール（nmap / netdiscover / arpwatch / tcpdump / Snort 
 sh scripts/build_app.sh        # KEKKAI.app を dist/ に作る（Mac標準のPythonで動くので署名・追加DL不要）
 ```
 
-できた `dist/KEKKAI.app` を「アプリケーション」へ移動し、初回だけ右クリック →『開く』。
+できた `dist/KEKKAI.app` を「アプリケーション」へ移動し、初回だけ次の手順で開く（未署名のため）。
+- macOS 15（Sequoia）以降: ダブルクリック →「開けません」の表示を閉じる → システム設定 > プライバシーとセキュリティ →
+  「セキュリティ」欄の「このまま開く」（パスワードを求められたら入力）。右クリック →『開く』は macOS 15 で廃止された
+  （[Apple Developer News 2024-08-06](https://developer.apple.com/news/?id=saqachfa)）。
+- macOS 14 以前: 右クリック →『開く』→『開く』。
+- 「“ターミナル”を制御」の確認が出たら「OK」（初回セットアップの進行を表示するため）。
 あとはダブルクリックするたびにダッシュボードが開き、ログイン中はバックグラウンドで監視が動きます。
 配布用に zip で渡したい場合は `dist/KEKKAI.app` をそのまま圧縮してください（中にプログラム一式を同梱済み）。
 
