@@ -170,6 +170,10 @@ class App:
         if path == "/api/coverage":
             from kekkai.coverage import describe
             return describe(m)
+        if path == "/api/vulnscan":
+            with m.lock:
+                return {"result": m.state.get("vulnscan"), "running": bool(m.state.get("vulnscan_running")),
+                        "nmap": bool(m._deep_available())}
         if path == "/api/report":
             from kekkai import report
             return {"markdown": report.markdown(m)}
@@ -230,6 +234,13 @@ class App:
             return {"started": True}
         if path == "/api/exposure/run":
             threading.Thread(target=_quiet(m.exposure_cycle), daemon=True).start()
+            return {"started": True}
+        if path == "/api/vulnscan/run":
+            if m.state.get("vulnscan_running"):
+                raise ApiError(409, "脆弱性診断は実行中です")
+            scan = body.get("scan_devices")
+            threading.Thread(target=_quiet(lambda: m.run_vulnscan(scan_devices=None if scan is None else bool(scan))),
+                             daemon=True, name="kekkai-vulnscan").start()
             return {"started": True}
         if path == "/api/intel/update":
             threading.Thread(target=_quiet(lambda: m.intel_cycle(force=bool(body.get("force")))), daemon=True).start()

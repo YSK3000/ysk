@@ -103,6 +103,8 @@ class Monitor:
             "health": {}, "sensor": {"active": False}, "leaks": None, "cycle": 0,
         }
         self._load_home()
+        self.state["vulnscan"] = self.store.kv_get("vulnscan_last")
+        self.state["vulnscan_running"] = False
 
     # ------------------------------------------------------------ helpers
     def _health(self, name: str, ok: bool, duration: float, error: Optional[str] = None) -> None:
@@ -592,6 +594,62 @@ class Monitor:
     def leak_watch_targets(self) -> List[str]:
         return [str(x) for x in (self.cfg.get("watch.names", []) or []) + (self.cfg.get("watch.domains", []) or []) if str(x).strip()]
 
+    def nvd_client(self, use_nvd: Optional[bool] = None) -> Optional[Any]:
+        """NVD client, or None when external lookups are off (then services fall back to product-level KEV)."""
+        if use_nvd is False or not self.cfg.get("privacy.external_lookups", True) or not self.cfg.get("vulnscan.use_nvd", True):
+            return None
+        from kekkai.intel.nvd import NVD
+        key = self.cfg.get("vulnscan.nvd_api_key") or os.environ.get("NVD_API_KEY")
+        return NVD(paths.data_dir() / "cache" / "nvd", api_key=key)
+
+    def run_vulnscan(self, scan_devices: Optional[bool] = None, use_nvd: Optional[bool] = None,
+                     progress: Optional[Callable[[str, float], None]] = None) -> Dict[str, Any]:
+        """脆弱性診断: assess this Mac, LAN services/devices and the public IP; store and alert."""
+        from kekkai import vulnscan
+        with self.lock:
+            if self.state.get("vulnscan_running"):
+                raise RuntimeError("脆弱性診断は実行中です")
+            self.state["vulnscan_running"] = True
+        t0 = time.time()
+        if scan_devices is None:
+            scan_devices = bool(self.cfg.get("vulnscan.scan_devices", True))
+
+        def say(msg: str, frac: float) -> None:
+            self.bus.publish("vulnscan", {"running": True, "message": msg, "progress": round(frac, 2)})
+            if progress:
+                progress(msg, frac)
+        try:
+            res = vulnscan.assess(self, nvd=self.nvd_client(use_nvd), scan_devices=scan_devices, progress=say)
+            self.raise_findings(vulnscan.findings(res), (self.state.get("network") or {}).get("id"))
+            with self.lock:
+                self.state["vulnscan"] = res
+            self.store.kv_set("vulnscan_last", res)
+            self.store.log_event("vulnscan", "脆弱性診断: %s（%d件, 所要 %.0f秒）" % (
+                res["summary"]["label"], res["summary"]["total"], res["duration"]))
+            self._health("vulnscan", True, time.time() - t0)
+            self.bus.publish("vulnscan", {"running": False, "summary": res["summary"], "ts": res["ts"]})
+            return res
+        except Exception as e:
+            self._health("vulnscan", False, time.time() - t0, repr(e))
+            self.bus.publish("vulnscan", {"running": False, "error": str(e)})
+            raise
+        finally:
+            with self.lock:
+                self.state["vulnscan_running"] = False
+
+    def vulnscan_cycle(self) -> Dict[str, Any]:
+        """Weekly background assessment; skipped while a recent one exists (the monitor restarts at login)."""
+        last = self.state.get("vulnscan") or {}
+        interval = float(self.cfg.get("monitor.vulnscan_interval_sec", 604800))
+        if last.get("ts") and time.time() - float(last["ts"]) < interval * 0.9:
+            return {"skipped": True, "last": last.get("ts")}
+        return self.run_vulnscan()
+
+    def vulnscan_brief(self) -> Optional[Dict[str, Any]]:
+        last = self.state.get("vulnscan") or None
+        return {"ts": last.get("ts"), "summary": last.get("summary"), "running": bool(self.state.get("vulnscan_running"))} \
+            if last else {"ts": None, "summary": None, "running": bool(self.state.get("vulnscan_running"))}
+
     def leak_cycle(self, force: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         targets = self.leak_watch_targets()
@@ -735,6 +793,7 @@ class Monitor:
                     "sensor": self.sensor_status(), "cycle": s.get("cycle"), "monitoring": self.monitoring_status(),
                     "posture_score": (s.get("posture") or {}).get("score"), "health": s.get("health"),
                     "exposure_checked_at": (s.get("exposure") or {}).get("checked_at"),
+                    "vulnscan": self.vulnscan_brief(),
                     "geo": self.geo.available, "feeds_entries": self.feeds.total_entries}
 
     def monitoring_status(self) -> Dict[str, Any]:
@@ -797,6 +856,7 @@ class Monitor:
             ("exposure", self.exposure_cycle, lambda: float(c.get("monitor.exposure_interval_sec", 21600)), 25.0),
             ("intel", self.intel_cycle, lambda: 3600.0, 2.0),
             ("leak", self.leak_cycle, lambda: float(c.get("monitor.leak_check_interval_sec", 86400)), 30.0),
+            ("vulnscan", self.vulnscan_cycle, lambda: float(c.get("monitor.vulnscan_interval_sec", 604800)), 180.0),
             ("sensor", self.sensor_cycle, lambda: 3.0, 3.0),
             ("prune", self.store.prune, lambda: 86400.0, 60.0),
         ]

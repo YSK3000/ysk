@@ -4,6 +4,8 @@
 #  2) ransomware.live API v2 の実際の応答（記録のみ）
 #  3) sfltool dumpbtm の実際の出力（ログイン項目の監視の準備、記録のみ）
 #  4) nmap: 公式の nmap を入れて、KEKKAI の詳細スキャン(-sV)が実機で動くか（必須）
+#  5) NVD: 米国NISTの脆弱性DBに実際に問い合わせ、KEKKAIの解析器でCVEが取れるか（必須）
+#  6) 脆弱性診断: このランナーの仮想LANで vulnscan を通しで実行（必須）
 set -u
 cd "$(dirname "$0")/.."
 PY=/usr/bin/python3
@@ -75,3 +77,50 @@ else
 fi
 rm -f "$NMAP_OUT"
 [ $rc = 0 ] && echo "PASS nmap -sV deep scan ran and parsed via KEKKAI" || { echo "FAIL: nmap deep scan"; exit 1; }
+
+echo "==== 5) NIST NVD CVE API 2.0: a real lookup through KEKKAI's own client and parser"
+NVD_OK=0
+for attempt in 1 2 3; do
+  PYTHONPATH=src "$PY" - <<'PY'
+import sys, tempfile
+from pathlib import Path
+from kekkai.intel import nvd
+c = nvd.NVD(Path(tempfile.mkdtemp()))
+r = c.cves_for("cpe:/a:openbsd:openssh:7.4")
+print("query=%s total=%s returned=%d error=%s rate_limited=%s" % (
+    r.get("query"), r.get("total"), len(r.get("cves") or []), r.get("error"), c.rate_limited))
+for x in (r.get("cves") or [])[:4]:
+    print("  %s score=%s sev=%s kev=%s cvss=%s | %s" % (x["id"], x["score"], x["severity"], x["kev"], x["cvss"], x["summary"][:70]))
+cves = r.get("cves") or []
+ok = (not r.get("error")) and len(cves) > 0 and all(x["id"].startswith("CVE-") and x["score"] is not None for x in cves[:5])
+sys.exit(0 if ok else (2 if c.rate_limited else 1))
+PY
+  rc=$?
+  [ $rc = 0 ] && { NVD_OK=1; break; }
+  [ $rc = 2 ] || break
+  echo "NVD answered with its rate limit (shared runner IP); waiting 35 s before retry $attempt"; sleep 35
+done
+[ $NVD_OK = 1 ] && echo "PASS NVD returned and KEKKAI parsed real CVEs for OpenSSH 7.4" || { echo "FAIL: NVD lookup"; exit 1; }
+
+echo "==== 6) 脆弱性診断 end to end on this runner (nmap -sV on its own private LAN -> NVD -> assessment)"
+VS_OUT=$(mktemp)
+PYTHONPATH=src "$PY" -m kekkai vulnscan --json > "$VS_OUT"
+vrc=$?
+"$PY" - "$VS_OUT" "$vrc" <<'PY'
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except (OSError, ValueError) as e:
+    print("no JSON from vulnscan: %s" % e); sys.exit(1)
+rc = int(sys.argv[2])
+s, cov = r["summary"], r["coverage"]
+print("exit=%d label=%s total=%d worst=%s exploited=%d complete=%s" % (rc, s["label"], s["total"], s["worst"], s["exploited"], s["complete"]))
+print("coverage=%s" % json.dumps(cov, ensure_ascii=False))
+print("gaps=%s" % json.dumps(r.get("gaps"), ensure_ascii=False))
+for i in r["items"][:10]:
+    print("  [%s] %s | %s | %s" % (i["severity"], i["asset"], i["title"], i.get("evidence")))
+ok = rc in (0, 3) and cov["nmap"] and cov["scanned"] >= 1 and isinstance(r["items"], list)
+sys.exit(0 if ok else 1)
+PY
+[ $? = 0 ] && echo "PASS 脆弱性診断 ran end to end (nmap scan, NVD lookup, assessment)" || { echo "FAIL: vulnscan end to end"; exit 1; }
+rm -f "$VS_OUT"

@@ -297,6 +297,74 @@ def cmd_portscan(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vulnscan(a: argparse.Namespace) -> int:
+    from kekkai.discovery.portscan import raise_fd_limit
+    raise_fd_limit()
+    m = monitor()
+    quiet = a.json
+
+    def say(msg: str, frac: float) -> None:
+        if not quiet:
+            print("  [%3d%%] %s" % (int(frac * 100), msg))
+    if not quiet:
+        print("  脆弱性診断を開始します（対象: このMac・自宅LANの機器・自宅の公開IP。LAN外はスキャンしません）")
+    if not a.offline:
+        from kekkai.intel import vulns
+        try:
+            vulns.update()  # KEV + Apple security releases; no-op when already fresh
+        except Exception as e:  # noqa: BLE001  stale data is reported as a gap below
+            if not quiet:
+                print("  脆弱性データの更新に失敗しました: %s" % e)
+        m.vulns = vulns.VulnDB()
+    m.fast_cycle()
+    try:
+        m.lan_cycle(active=True)
+    except Exception as e:  # noqa: BLE001  a failed LAN sweep still leaves the Mac and stored data to assess
+        if not quiet:
+            print("  LAN探索に失敗しました: %s" % e)
+    if not a.offline:
+        try:
+            m.exposure_cycle()
+        except Exception as e:  # noqa: BLE001
+            if not quiet:
+                print("  外部露出の確認に失敗しました: %s" % e)
+    if not a.no_scan and not m._deep_available() and not quiet:
+        print("  ※ nmap が無いため機器のサービスの版を特定できません（brew install nmap で精度が上がります）")
+    try:
+        res = m.run_vulnscan(scan_devices=not a.no_scan, use_nvd=False if a.offline else None, progress=say)
+    except RuntimeError as e:
+        print("  " + c(str(e), "31"))
+        return 2
+    s, cov = res["summary"], res["coverage"]
+    bad = s["worst"] in ("high", "critical")
+    if a.json:
+        print(dumps(res, indent=1))
+        return 3 if bad else 0
+    print()
+    print("  総合: %s  （緊急 %d / 高 %d / 中 %d / 低 %d、悪用確認あり %d 件）" % (
+        c(s["label"], "1;31" if bad else "1;32"), s["critical"], s["high"], s["medium"], s["low"], s["exploited"]))
+    print("  対象: 機器 %d 台（版を特定 %d 台）／NVD照合 %d 回（キャッシュ %d 件）%s" % (
+        cov["devices"], cov["with_versions"], cov["nvd_queried"], cov["nvd_cache_hits"],
+        "／NVDの回数制限で一部未照合" if cov["nvd_rate_limited"] else ""))
+    if res["items"]:
+        table([[SEV_JA.get(i["severity"], i["severity"]), i["asset"], i["title"],
+                ("⚠ " + ", ".join(i["exploited"][:2])) if i.get("exploited") else "", i.get("confidence", "")]
+               for i in res["items"]], ["重大度", "対象", "内容", "悪用確認", "確度"])
+        print("\n  直し方（優先順）:")
+        for i in res["items"][:8]:
+            print("   - [%s] %s: %s" % (SEV_JA.get(i["severity"], i["severity"]), i["asset"], i.get("fix", "")))
+    else:
+        print("  検出はありませんでした。")
+    if res.get("gaps"):
+        print("\n  " + c("診断できていない範囲:", "1;33"))
+        for line in res["gaps"]:
+            print("   ・" + line)
+    print("\n  注意:")
+    for line in res["limits"]:
+        print("   ・" + line)
+    return 3 if bad else 0
+
+
 def cmd_lookup(a: argparse.Namespace) -> int:
     from kekkai.netutil import parse_ip
     ip = parse_ip(a.ip)
@@ -546,6 +614,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--ports", help="例: 22,80,443（内蔵スキャナ）")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_portscan)
+    s = sub.add_parser("vulnscan", help="脆弱性診断（このMac・自宅LANの機器・公開IP）")
+    s.add_argument("--no-scan", action="store_true", help="nmapで機器を新たにスキャンせず、保存済みの情報で診断")
+    s.add_argument("--offline", action="store_true", help="外部(NVD・Shodan)に問い合わせない")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_vulnscan)
     s = sub.add_parser("lookup", help="IPアドレスの照会")
     s.add_argument("ip")
     s.add_argument("--external", action="store_true", help="Shodan InternetDB / GreyNoise にも照会")

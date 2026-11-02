@@ -160,6 +160,17 @@ class VulnDB:
                 "kev": [k["cveID"] for k in kev], "days_since_security_release": stale,
                 "newer_major": newest_major > mine[:1], "unknown_line": False}
 
+    def kev_for_product(self, vendor: Optional[str], product: Optional[str]) -> List[Dict[str, Any]]:
+        """KEV entries for an exact vendor + product (as in a CPE), version not considered.
+        Used when NVD can't be reached: 'this product has actively exploited flaws — check your version'."""
+        def flat(s: Optional[str]) -> str:
+            return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+        fv, fp = flat(vendor), flat(product)
+        if len(fv) < 3 or len(fp) < 3 or fv in VENDOR_SKIP:
+            return []
+        return [v for v in self.kev.values()
+                if flat(v.get("vendorProject")) == fv and flat(v.get("product")) == fp]
+
     def device_hits(self, vendor: Optional[str], models: Iterable[Optional[str]]) -> Dict[str, Any]:
         """KEV entries for a LAN device's vendor, and those whose product/name mention its model."""
         vg = _grams(_norm(vendor or ""))

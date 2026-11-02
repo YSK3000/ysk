@@ -1,0 +1,28 @@
+{
+ "_note": "Schema sample of the NVD CVE API 2.0 response (field names per https://nvd.nist.gov/developers/vulnerabilities). IDs CVE-2099-* are fictitious test entries, not real vulnerabilities. CI checks the parser against a live NVD response.",
+ "resultsPerPage": 4,
+ "startIndex": 0,
+ "totalResults": 4,
+ "format": "NVD_CVE",
+ "version": "2.0",
+ "timestamp": "2026-11-02T00:00:00.000",
+ "vulnerabilities": [
+  {"cve": {"id": "CVE-2099-1001", "published": "2099-01-02T03:15:10.170", "vulnStatus": "Analyzed",
+           "descriptions": [{"lang": "es", "value": "entrada de prueba"},
+                            {"lang": "en", "value": "Test entry: remote code execution in the example service."}],
+           "metrics": {"cvssMetricV31": [{"source": "nvd@nist.gov", "type": "Primary",
+                                           "cvssData": {"version": "3.1", "baseScore": 9.8, "baseSeverity": "CRITICAL"}}]}}},
+  {"cve": {"id": "CVE-2099-1002", "published": "2099-02-01T13:15:06.467", "vulnStatus": "Modified",
+           "cisaExploitAdd": "2099-02-10", "cisaActionDue": "2099-03-03", "cisaRequiredAction": "Apply updates.",
+           "cisaVulnerabilityName": "Test entry listed as known exploited",
+           "descriptions": [{"lang": "en", "value": "Test entry: race condition, known exploited."}],
+           "metrics": {"cvssMetricV31": [{"source": "secalert@example.org", "type": "Secondary",
+                                           "cvssData": {"version": "3.1", "baseScore": 8.1, "baseSeverity": "HIGH"}}]}}},
+  {"cve": {"id": "CVE-2099-1003", "published": "2099-01-14T22:59:01.140", "vulnStatus": "Modified",
+           "descriptions": [{"lang": "en", "value": "Test entry scored only with CVSS v2 (severity outside cvssData)."}],
+           "metrics": {"cvssMetricV2": [{"source": "nvd@nist.gov", "type": "Primary", "baseSeverity": "MEDIUM",
+                                          "cvssData": {"version": "2.0", "baseScore": 4.0}}]}}},
+  {"cve": {"id": "CVE-2099-1004", "published": "2099-01-01T00:00:00.000", "vulnStatus": "Rejected",
+           "descriptions": [{"lang": "en", "value": "** REJECT ** Test entry."}], "metrics": {}}}
+ ]
+}

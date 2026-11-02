@@ -17,7 +17,13 @@ DEFAULTS: Dict[str, Any] = {
         "posture_interval_sec": 1800,
         "exposure_interval_sec": 21600,
         "leak_check_interval_sec": 86400,   # ransomware.live leak-site check (only if watch.names is set)
+        "vulnscan_interval_sec": 604800,    # weekly vulnerability assessment (脆弱性診断)
         "learning_cycles": 2,          # first cycles only build the baseline
+    },
+    "vulnscan": {
+        "use_nvd": True,               # look up detected product versions in NIST NVD (sends only CPE strings)
+        "scan_devices": True,          # nmap -sV each LAN device first (private addresses only; needs nmap)
+        "nvd_api_key": None,           # optional free key: 50 instead of 5 requests per 30 s (or env NVD_API_KEY)
     },
     "watch": {
         # Your own identifiers to look for in public breach/leak sources. Leave empty to disable.

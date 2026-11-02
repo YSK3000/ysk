@@ -81,6 +81,17 @@ TOOLS: List[Dict[str, Any]] = [
      "description": "How the internet sees the home: public IP, Shodan InternetDB ports/CVEs, router UPnP port mappings.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True}},
+    {"name": "kekkai_vulnscan", "title": "脆弱性診断",
+     "description": "Vulnerability assessment of the user's own Mac, home-LAN devices and public IP: macOS version vs "
+                    "Apple security releases, nmap-detected service versions (CPE) vs NIST NVD CVEs, device models "
+                    "and Shodan-listed CVEs vs CISA KEV, and dangerous open services. Returns prioritized items with "
+                    "evidence, confidence and fixes. scan=true first runs nmap -sV on LAN devices (private IPs only, "
+                    "takes minutes); default reuses stored scan data. Results are leads to verify, not proof.",
+     "inputSchema": {"type": "object", "properties": {
+         "scan": {"type": "boolean", "description": "nmap-scan LAN devices first (slow)"},
+         "last": {"type": "boolean", "description": "only return the last stored result, do not run"}},
+         "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True}},
     {"name": "kekkai_leak_search", "title": "暴露サイトの流出情報を検索",
      "description": "Search dark-web ransomware leak-site victim listings (ransomware.live) by keyword, or list "
                     "recent victims for a country (ISO code, e.g. JP). Returns public metadata only (who was "
@@ -221,6 +232,16 @@ class KekkaiTools:
 
     def t_exposure(self, a: Dict[str, Any]) -> Any:
         return self.m.exposure_cycle()
+
+    def t_vulnscan(self, a: Dict[str, Any]) -> Any:
+        m = self.m
+        if a.get("last"):
+            return m.state.get("vulnscan") or {"result": None, "note": "まだ診断していません"}
+        m.fast_cycle()
+        try:
+            return m.run_vulnscan(scan_devices=bool(a.get("scan")))
+        except RuntimeError as e:
+            raise ToolError(str(e))
 
     def t_leak_search(self, a: Dict[str, Any]) -> Any:
         from kekkai.intel import leaks

@@ -32,6 +32,14 @@ def parse_xml(text: str) -> List[Dict[str, Any]]:
             banner = " ".join(x for x in (svc.get("product"), svc.get("version"), svc.get("extrainfo")) if x)
             if banner:
                 entry["banner"] = banner[:160]
+            if svc.get("product"):
+                entry["product"] = svc.get("product")[:80]
+            if svc.get("version"):
+                entry["version"] = svc.get("version")[:40]
+            # Application/OS CPEs (e.g. cpe:/a:openbsd:openssh:7.4) identify the exact product for CVE lookup.
+            cpes = [c.text.strip() for c in svc.findall("cpe") if c.text and c.text.strip().startswith("cpe:/")]
+            if cpes:
+                entry["cpe"] = cpes[:4]
         out.append(entry)
     return out
 
