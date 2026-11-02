@@ -64,7 +64,12 @@ def main():
                     if line.startswith("Pid:"):
                         own_pids.add(int(line.split()[1]))
             assert any(r["pid"] in own_pids for r in found), "current process PID was not associated"
-            assert len(request("/api/coverage")["cards"]) == 5
+            # every defense the dashboard reports on must be present (ids, not a fixed count, so new
+            # defenses can be added without breaking this check)
+            ids = {c["id"] for c in request("/api/coverage")["cards"]}
+            expected = {"connections", "feeds", "sensor", "nmap", "vulnscan", "exposure", "leaks", "blocking"}
+            assert expected <= ids, "coverage cards missing: %s" % sorted(expected - ids)
+            assert request("/api/vulnscan")["running"] is False  # the authenticated vulnscan endpoint answers
             print("PASS real OS connection -> PID -> repeated collection -> authenticated HTTP")
             print("platform=%s cycles=%s status=%s (no addresses or tokens printed)" % (
                 summary["platform"], summary["cycle"], summary["monitoring"]["status"]))
