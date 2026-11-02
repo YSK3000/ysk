@@ -68,18 +68,39 @@ def parse_xml(text: str) -> List[Dict[str, Any]]:
     return out
 
 
+# Common TCP services on home networks and small servers, added to KEKKAI's own list (portscan.SERVICES)
+# when the port list has to be given explicitly.
+EXTRA_PORTS = (20, 26, 79, 106, 113, 119, 179, 199, 427, 444, 513, 514, 543, 544, 990, 1025, 1026, 1027, 1110,
+               1900, 2000, 2001, 2121, 2869, 3128, 3478, 4000, 4443, 4567, 4899, 5009, 5051, 5190, 5431, 5631,
+               5666, 6000, 6001, 6646, 7070, 7443, 8001, 8002, 8010, 8082, 8083, 8086, 8089, 8090, 8099, 8181,
+               8200, 8333, 8400, 8500, 8800, 8899, 9001, 9080, 9090, 9091, 9443, 9999, 10001, 10243, 12345,
+               49153, 49154, 49155, 50000, 50001)
+
+
+def explicit_ports() -> List[int]:
+    return sorted(set(SERVICES) | set(EXTRA_PORTS))
+
+
 def scan(ip: str, top_ports: int = 200, timeout: float = 240) -> Dict[str, Any]:
     _check_scope(ip)
     if not available():
         raise RuntimeError("nmap が見つかりません（防御機能の稼働状況の「nmapを入れる」か ./kekkai install-nmap）")
     t0 = time.time()
     exe, env = command()
-    rc, out, err = run([exe or "nmap", "-sV", "--version-light", "-T4", "-Pn", "--top-ports", str(top_ports),
-                        "-oX", "-", "--", ip], timeout=timeout, env=env)
+    base = [exe or "nmap", "-sV", "--version-light", "-T4", "-Pn"]
+    rc, out, err = run(base + ["--top-ports", str(top_ports), "-oX", "-", "--", ip], timeout=timeout, env=env)
+    scanned: Any = top_ports
+    if rc != 0 and "top-ports" in err:
+        # Measured on a real macOS 26 runner: nmap.org's 7.993 build rejects every --top-ports value
+        # ("--top-ports should be an integer between 1 and 65535") while Homebrew's 7.992 accepts it.
+        # Fall back to an explicit list: KEKKAI's own risk-ranked ports plus common home/server ports.
+        ports = explicit_ports()
+        rc, out, err = run(base + ["-p", ",".join(map(str, ports)), "-oX", "-", "--", ip], timeout=timeout, env=env)
+        scanned = len(ports)
     if rc != 0:
         raise RuntimeError("nmap failed: %s" % (err.strip()[-300:] or rc))
     ports = parse_xml(out)
     order = ["info", "low", "medium", "high", "critical"]
     worst = max((p["risk"] for p in ports), key=order.index) if ports else None
-    return {"ip": ip, "scanned": top_ports, "open": ports, "worst": worst, "duration": round(time.time() - t0, 1),
+    return {"ip": ip, "scanned": scanned, "open": ports, "worst": worst, "duration": round(time.time() - t0, 1),
             "method": "nmap -sV", "ts": time.time()}

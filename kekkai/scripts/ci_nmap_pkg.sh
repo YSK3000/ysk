@@ -32,8 +32,13 @@ file /Applications/nmap.app/Contents/MacOS/nmap /Applications/nmap.app/Contents/
 echo "--- launcher script (record)"; cat /Applications/nmap.app/Contents/MacOS/nmap
 ls /Applications/nmap.app/Contents/Resources /Applications/nmap.app/Contents/Resources/share 2>&1 | head -20
 $PY -c "from kekkai.discovery.nmap import command; print('command() ->', command())"
-echo "--- launcher with KEKKAI's arguments (record only)"
-/Applications/nmap.app/Contents/MacOS/nmap -sV --version-light -T4 -Pn --top-ports 20 -oX - -- 127.0.0.1 2>&1 | tail -3
+echo "--- --top-ports on this build (record only)"
+ls /Applications/nmap.app/Contents/Resources/share/nmap | head -12
+B=/Applications/nmap.app/Contents/Resources
+for n in 20 200; do
+  DYLD_LIBRARY_PATH=$B/lib NMAPDIR=$B/share/nmap $B/bin/nmap -Pn --top-ports $n -oX - -- 127.0.0.1 2>&1 | grep -E 'top-ports|<finished|scaninfo' | head -3
+done
+DYLD_LIBRARY_PATH=$B/lib NMAPDIR=$B/share/nmap $B/bin/nmap -d -Pn --top-ports 20 -- 127.0.0.1 2>&1 | head -12
 
 echo "==== 3) deep scan with the installed nmap finds a real service and its version"
 $PY -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &

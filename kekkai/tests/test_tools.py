@@ -168,6 +168,37 @@ class BundleCommandTest(unittest.TestCase):
             self.assertEqual(nmapmod.command(), ("/opt/homebrew/bin/nmap", None))   # Homebrew: unchanged
 
 
+class TopPortsFallbackTest(unittest.TestCase):
+    def test_explicit_port_list_when_top_ports_is_rejected(self):
+        from kekkai.discovery import nmap as nmapmod
+        calls = []
+        xml = ('<nmaprun><host><ports><port protocol="tcp" portid="8080"><state state="open"/>'
+               '<service name="http" product="SimpleHTTPServer" version="0.6"/></port></ports></host></nmaprun>')
+
+        def fake_run(cmd, timeout=None, env=None):
+            calls.append(cmd)
+            if "--top-ports" in cmd:
+                return 1, "", "--top-ports should be an integer between 1 and 65535\nQUITTING!\n"
+            return 0, xml, ""
+        with mock.patch.object(nmapmod, "run", fake_run), mock.patch.object(nmapmod, "find_cmd", return_value="/x/nmap"):
+            res = nmapmod.scan("192.168.1.20")
+        self.assertEqual(len(calls), 2)
+        plist = calls[1][calls[1].index("-p") + 1].split(",")
+        for must in ("22", "23", "445", "7547", "8080", "37215"):
+            self.assertIn(must, plist)
+        self.assertEqual(res["scanned"], len(plist))
+        self.assertEqual(res["open"][0]["product"], "SimpleHTTPServer")
+
+    def test_other_errors_are_not_retried(self):
+        from kekkai.discovery import nmap as nmapmod
+        calls = []
+        with mock.patch.object(nmapmod, "run", lambda cmd, **k: calls.append(cmd) or (1, "", "Failed to resolve")), \
+                mock.patch.object(nmapmod, "find_cmd", return_value="/x/nmap"):
+            with self.assertRaises(RuntimeError):
+                nmapmod.scan("192.168.1.20")
+        self.assertEqual(len(calls), 1)
+
+
 class MonitorInstallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
