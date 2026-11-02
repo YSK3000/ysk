@@ -289,7 +289,9 @@ def _install_pkg(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any
         if rc != 0:
             cancelled = "-128" in out or "User canceled" in out or "キャンセル" in out
             return {"ok": False, "method": "pkg", "cancelled": cancelled,
-                    "error": "インストールを取り消しました" if cancelled else "インストーラーが失敗: %s" % out}
+                    "error": "インストールを取り消しました" if cancelled else
+                    "インストーラーが失敗: %s（ターミナルで KEKKAI.app/Contents/Resources/kekkai/kekkai install-nmap "
+                    "を実行しても導入できます）" % out}
         return {"ok": True, "method": "pkg", "source": NMAP_DIST + dmg, "sha256": got, "signer": who,
                 "rosetta_installed": need_rosetta, "only_nmap": bool(choices)}
     finally:

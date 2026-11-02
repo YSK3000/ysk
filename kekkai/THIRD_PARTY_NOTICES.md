@@ -69,3 +69,4 @@ OR OTHER DEALINGS IN THE SOFTWARE.
 | macOS security releases | SOFA by Mac Admins Open Source (sofafeed.macadmins.io, fallback: GitHub) | per the project's license: https://github.com/macadmins/sofa |
 | CVEs for a product version (脆弱性診断) | NIST National Vulnerability Database, CVE API 2.0 | Public domain. "This product uses the NVD API but is not endorsed or certified by the NVD." |
 | Ransomware leak-site listings | Ransomware.live API v2 | personal use, attribution required (shown) |
+| Deep scanner (optional; installed only when the user asks, not bundled) | Nmap — Homebrew formula `nmap`, or the official macOS installer from nmap.org (checked against nmap.org's published SHA-256) | Nmap Public Source License (https://nmap.org/npsl/) |
