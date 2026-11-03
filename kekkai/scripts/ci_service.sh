@@ -46,6 +46,16 @@ plutil -extract EnvironmentVariables.PYTHONPATH raw "$HOME/Library/LaunchAgents/
 ./kekkai open > /tmp/kekkai-open2.txt 2>&1; sed 's/token=[^ ]*/token=<hidden>/' /tmp/kekkai-open2.txt
 [ "$(running)" = "$($PY -c "import sys; sys.path.insert(0, 'src'); import kekkai; print(kekkai.__version__)")" ] || fail "did not switch back"
 echo "PASS replacing the app switches the background monitor to the new copy and version"
+# 1c) 同じ場所・同じ版番号のまま中身だけ新しくなった場合（作り直したアプリで上書き）も、古い監視を再起動する
+code_of() { $PY -c "import sys; sys.path.insert(0, 'src'); from kekkai import service; print(service.code_digest())"; }
+running_code() { $PY -c "import sys; sys.path.insert(0, 'src'); from kekkai import cli; print((cli._running_info() or {}).get('code'))"; }
+echo "# rebuilt" >> src/kekkai/__init__.py
+WANT=$(code_of)
+./kekkai open > /tmp/kekkai-open3.txt 2>&1; sed 's/token=[^ ]*/token=<hidden>/' /tmp/kekkai-open3.txt
+git checkout -- src/kekkai/__init__.py
+grep -q "古い版を再起動" /tmp/kekkai-open3.txt || fail "same-version rebuild did not restart the monitor"
+[ "$(running_code)" = "$WANT" ] || fail "monitor runs code $(running_code), expected $WANT"
+echo "PASS a rebuilt app with the same version also replaces the background monitor"
 ./kekkai uninstall-agent || fail "uninstall-agent"
 for _ in $(seq 20); do alive || break; sleep 0.5; done
 alive && fail "dashboard still running after uninstall-agent"

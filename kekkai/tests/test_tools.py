@@ -252,10 +252,13 @@ class RefreshAgentTest(unittest.TestCase):
         with open(self.plist, "wb") as f:
             plistlib.dump({"Label": "com.kekkai.monitor", "EnvironmentVariables": {"PYTHONPATH": root}}, f)
 
-    def run_refresh(self, versions):
+    def run_refresh(self, versions, code="same"):
+        from kekkai import service
+        mine = service.code_digest()
         seq = iter(versions)
+        info = lambda *a, **k: {"version": next(seq, self.cli.__version__), "code": mine if code == "same" else code}  # noqa: E731
         with mock.patch.object(self.cli, "IS_MACOS", True), mock.patch.object(self.cli, "_agent_path", return_value=self.plist), \
-                mock.patch.object(self.cli, "_running_version", side_effect=lambda *a, **k: next(seq, self.cli.__version__)), \
+                mock.patch.object(self.cli, "_running_info", side_effect=info), \
                 mock.patch.object(self.cli, "run", side_effect=lambda cmd, **k: self.calls.append(cmd) or (0, "", "")), \
                 mock.patch.object(self.cli, "cmd_install_agent", side_effect=lambda a: self.calls.append(["install-agent"]) or 0), \
                 mock.patch("kekkai.server.session_alive", return_value=True):
@@ -270,6 +273,15 @@ class RefreshAgentTest(unittest.TestCase):
         self.write_agent("/Users/me/Downloads/KEKKAI.app/Contents/Resources/kekkai/src")
         self.assertEqual(self.run_refresh([self.cli.__version__]), "moved")
         self.assertIn(["install-agent"], self.calls)
+
+    def test_same_version_but_different_code_is_restarted(self):
+        """A rebuilt app keeps its version number: the old monitor must still be replaced."""
+        self.write_agent(self.cli._code_root())
+        self.assertEqual(self.run_refresh([self.cli.__version__], code="0123456789abcdef"), "restarted")
+
+    def test_old_server_without_code_fingerprint_is_restarted(self):
+        self.write_agent(self.cli._code_root())
+        self.assertEqual(self.run_refresh([self.cli.__version__], code=None), "restarted")
 
     def test_current_version_is_left_alone(self):
         self.write_agent(self.cli._code_root())

@@ -107,6 +107,11 @@ class Monitor:
         self.state["vulnscan_running"] = False
         self.state["nmap_install"] = {"running": False, "message": None, "result": None}
         self.state["nmap_check"] = self.store.kv_get("nmap_check")
+        try:
+            from kekkai.service import code_digest
+            self.state["code"] = code_digest()   # lets a newly opened KEKKAI.app tell whether this server runs its code
+        except OSError:
+            self.state["code"] = None
         self._install_nmap = None  # injection point for tests (defaults to kekkai.tools.install_nmap)
         self._open_terminal_install = None  # injection point for tests (defaults to kekkai.tools.open_terminal_install)
 
@@ -862,7 +867,7 @@ class Monitor:
     def summary(self) -> Dict[str, Any]:
         with self.lock:
             s = self.state
-            return {"ts": s.get("ts"), "version": s["version"], "platform": s["platform"], "network": s.get("network"),
+            return {"ts": s.get("ts"), "version": s["version"], "code": s.get("code"), "platform": s["platform"], "network": s.get("network"),
                     "home": s.get("home"), "stats": s.get("stats"), "threat": s.get("threat") or CHECKING, "lan": s.get("lan"),
                     "sensor": self.sensor_status(), "cycle": s.get("cycle"), "monitoring": self.monitoring_status(),
                     "posture_score": (s.get("posture") or {}).get("score"), "health": s.get("health"),

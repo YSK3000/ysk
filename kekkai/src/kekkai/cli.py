@@ -98,6 +98,11 @@ def _serve_live(a: argparse.Namespace) -> int:
 
 def _running_version(timeout: float = 2.0) -> Optional[str]:
     """Version reported by the dashboard listening now (None when none answers)."""
+    return (_running_info(timeout) or {}).get("version")
+
+
+def _running_info(timeout: float = 2.0) -> Optional[dict]:
+    """{"version", "code"} of the dashboard listening now (None when none answers)."""
     import json
     import urllib.request
     try:
@@ -107,7 +112,8 @@ def _running_version(timeout: float = 2.0) -> Optional[str]:
                                      headers={"Authorization": "Bearer " + sess["token"]})
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback: never via a proxy
         with opener.open(req, timeout=timeout) as resp:
-            return json.loads(resp.read(1 << 20)).get("version")
+            body = json.loads(resp.read(1 << 20))
+            return {"version": body.get("version"), "code": body.get("code")}
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -131,13 +137,17 @@ def refresh_agent(wait: float = 45.0) -> Optional[str]:
     except (OSError, ValueError, plistlib.InvalidFileException):
         agent_root = None
     from kekkai import server, service
-    running = _running_version()
+    info = _running_info()
+    mine = service.code_digest()
+    # Compare the code itself, not only the version: a rebuilt app with the same version number must also
+    # replace the old background monitor (an older server reports no "code" and is always replaced).
+    stale = bool(info) and (info.get("version") != __version__ or info.get("code") != mine)
     if "/AppTranslocation/" in _code_root():
         return None  # never point the agent at a temporary copy; the launcher asks the user to move the app
     if agent_root != _code_root():
         did = "moved"
         cmd_install_agent(argparse.Namespace())
-    elif running and running != __version__:
+    elif stale:
         did = "restarted"
         rc, _, err = run(["launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), AGENT_LABEL)], timeout=30)
         if rc != 0:
@@ -146,7 +156,8 @@ def refresh_agent(wait: float = 45.0) -> Optional[str]:
         return None
     deadline = time.time() + wait
     while time.time() < deadline:
-        if server.session_alive() and _running_version() == __version__:
+        now = _running_info() if server.session_alive() else None
+        if now and now.get("version") == __version__ and now.get("code") == mine:
             break
         time.sleep(0.5)
     return did
