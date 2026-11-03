@@ -77,6 +77,18 @@ def run_checks(cfg: Any, monitor: Any = None, quick: bool = False) -> List[Dict[
                       "" if ctx.gateway else "ゲートウェイを特定できません"))
     if ctx is not None and ctx.gateway:
         out.append(_local_network_check(ctx.gateway))
+    if find_cmd("nmap"):
+        chk = monitor.state.get("nmap_check") if monitor is not None else None
+        if chk is None and not quick:
+            from kekkai import tools
+            chk = tools.nmap_selftest(ctx.gateway if ctx is not None else None)
+        if chk:
+            f = chk.get("failed") or {}
+            out.append(_c("nmap 動作確認", "ok" if chk.get("ok") else "fail",
+                          "起動・版の特定・LAN接続を確認済み" if chk.get("ok") else "%s: %s" % (f.get("label", "?"), f.get("detail", "")),
+                          "" if chk.get("ok") else (f.get("fix") or "")))
+        else:
+            out.append(_c("nmap 動作確認", "info", "未確認", "ダッシュボードの「動作確認」または ./kekkai nmap-check"))
     neigh, err, dt = _timed(p.neighbors)
     known = [n for n in (neigh or []) if n.mac]
     out.append(_c("ARPテーブル", "fail" if err else ("ok" if known else "warn"),

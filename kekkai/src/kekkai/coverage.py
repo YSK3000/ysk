@@ -57,8 +57,17 @@ def _nmap_card(monitor, nmap: bool):
     inst = (getattr(monitor, "state", {}) or {}).get("nmap_install") or {}
     card = {"id": "nmap", "label": "Nmap 詳細診断", "url": "https://nmap.org/download.html",
             "action": "自分が管理する機器のサービスを確認"}
+    check = (getattr(monitor, "state", {}) or {}).get("nmap_check") or {}
     if nmap:
-        return dict(card, state="available", detail="利用可能。LAN機器のサービスと版を特定し、脆弱性診断で使用")
+        card["checkable"] = True
+        if not check.get("ts"):
+            return dict(card, state="unverified", detail="導入済み。この Mac で動くかはまだ確認していません（「動作確認」）")
+        when = _ago(max(0, time.time() - float(check["ts"])))
+        if check.get("ok"):
+            return dict(card, state="active", detail="動作確認済み（%s）。LAN機器のサービスと版を特定し、脆弱性診断で使用" % when)
+        f = check.get("failed") or {}
+        return dict(card, state="broken", detail="動いていません（%s の確認）: %s — %s" % (
+            when, f.get("label", ""), f.get("detail", "")), fix=f.get("fix"))
     if inst.get("running"):
         return dict(card, state="installing", detail="導入中: %s" % (inst.get("message") or ""))
     last = inst.get("result") or {}

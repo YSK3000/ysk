@@ -106,7 +106,9 @@ class Monitor:
         self.state["vulnscan"] = self.store.kv_get("vulnscan_last")
         self.state["vulnscan_running"] = False
         self.state["nmap_install"] = {"running": False, "message": None, "result": None}
+        self.state["nmap_check"] = self.store.kv_get("nmap_check")
         self._install_nmap = None  # injection point for tests (defaults to kekkai.tools.install_nmap)
+        self._open_terminal_install = None  # injection point for tests (defaults to kekkai.tools.open_terminal_install)
 
     # ------------------------------------------------------------ helpers
     def _health(self, name: str, ok: bool, duration: float, error: Optional[str] = None) -> None:
@@ -655,6 +657,29 @@ class Monitor:
         res: Dict[str, Any] = {"ok": False, "error": "不明なエラー"}
         try:
             res = (self._install_nmap or tools.install_nmap)(progress=say, prefer=method)
+            if not res.get("ok") and res.get("admin_failed"):
+                # The macOS password dialog could not be shown from the background monitor: finish in Terminal.
+                opened, why = (self._open_terminal_install or tools.open_terminal_install)()
+                if opened:
+                    say("ターミナルを開きました。ターミナルの表示に従ってパスワードを入力してください（最大15分待ちます）…")
+                    deadline = time.time() + 900
+                    while time.time() < deadline and not self._deep_available():
+                        if self._stop.wait(3):
+                            break
+                    if self._deep_available():
+                        from kekkai.util import find_cmd
+                        res = {"ok": True, "method": "pkg-terminal", "path": find_cmd("nmap"), "version": tools.nmap_version()}
+                    else:
+                        res = dict(res, error="ターミナルでの導入が終わりませんでした（15分）。ターミナルの表示を確認してください")
+                else:
+                    res = dict(res, error="%s／ターミナルも開けませんでした: %s" % (res.get("error"), why))
+            if res.get("ok"):
+                say("導入できました。この Mac で実際に動くか確認しています…")
+                res = dict(res, check=self.nmap_check())
+                if not res["check"].get("ok"):
+                    f = res["check"].get("failed") or {}
+                    res.update(ok=False, error="導入はできましたが動作確認で失敗: %s。%s" % (
+                        f.get("detail", ""), f.get("fix") or ""))
             return res
         finally:
             with self.lock:
@@ -662,6 +687,29 @@ class Monitor:
             self.store.log_event("tools", ("nmap を導入: %s %s" % (res.get("version") or "", res.get("method") or ""))
                                  if res.get("ok") else "nmap の導入に失敗: %s" % res.get("error"))
             self.bus.publish("tools", {"tool": "nmap", "running": False, "result": res})
+
+    def nmap_check(self) -> Dict[str, Any]:
+        """Prove nmap works on this Mac (run, identify a service, reach the LAN); keep and publish the evidence."""
+        from kekkai import tools
+        gw = (self.state.get("network") or {}).get("gateway")
+        t0 = time.time()
+        res = tools.nmap_selftest(gw)
+        with self.lock:
+            self.state["nmap_check"] = res
+        self.store.kv_set("nmap_check", res)
+        self._health("nmap_check", bool(res.get("ok")), time.time() - t0,
+                     None if res.get("ok") else (res.get("failed") or {}).get("detail"))
+        self.bus.publish("tools", {"tool": "nmap", "running": False, "check": res})
+        return res
+
+    def nmap_check_cycle(self) -> Optional[Dict[str, Any]]:
+        """Daily: re-prove nmap still works (macOS updates and permission changes can break it silently)."""
+        if not self._deep_available():
+            return None
+        last = self.state.get("nmap_check") or {}
+        if last.get("ok") and last.get("ts") and time.time() - float(last["ts"]) < 86400 * 0.9:
+            return last
+        return self.nmap_check()
 
     def vulnscan_cycle(self) -> Dict[str, Any]:
         """Weekly background assessment; skipped while a recent one exists (the monitor restarts at login)."""
@@ -883,6 +931,7 @@ class Monitor:
             ("intel", self.intel_cycle, lambda: 3600.0, 2.0),
             ("leak", self.leak_cycle, lambda: float(c.get("monitor.leak_check_interval_sec", 86400)), 30.0),
             ("vulnscan", self.vulnscan_cycle, lambda: float(c.get("monitor.vulnscan_interval_sec", 604800)), 180.0),
+            ("nmap_check", self.nmap_check_cycle, lambda: 86400.0, 45.0),
             ("sensor", self.sensor_cycle, lambda: 3.0, 3.0),
             ("prune", self.store.prune, lambda: 86400.0, 60.0),
         ]

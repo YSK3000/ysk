@@ -2,6 +2,13 @@
 # KEKKAI.app の起動本体（Finderでダブルクリックされると実行される）。
 # プロジェクト一式はこのアプリ内（Contents/Resources/kekkai）に同梱されている。
 HERE=$(cd "$(dirname "$0")" && pwd)
+# ダウンロードしたままの場所で開くと、macOS はアプリを一時的な場所（App Translocation）から起動する。
+# そこを自動起動に登録すると、あとで消えて監視が壊れるため、先に「アプリケーション」へ移してもらう。
+case "$HERE" in
+  */AppTranslocation/*)
+    osascript -e 'display alert "KEKKAI を「アプリケーション」フォルダへ移動してください" message "ダウンロードした場所のままでは、macOS が一時的な場所から起動するため、自動起動や nmap の導入が正しく動きません。Finder で KEKKAI.app を「アプリケーション」フォルダへドラッグしてから、もう一度開いてください。" as warning'
+    exit 1 ;;
+esac
 APP=$(cd "$HERE/../Resources/kekkai" 2>/dev/null && pwd) || {
   osascript -e 'display alert "KEKKAI" message "アプリの中身が壊れています。再ダウンロードしてください。" as critical'
   exit 1

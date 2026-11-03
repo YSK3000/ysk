@@ -132,6 +132,8 @@ def refresh_agent(wait: float = 45.0) -> Optional[str]:
         agent_root = None
     from kekkai import server, service
     running = _running_version()
+    if "/AppTranslocation/" in _code_root():
+        return None  # never point the agent at a temporary copy; the launcher asks the user to move the app
     if agent_root != _code_root():
         did = "moved"
         cmd_install_agent(argparse.Namespace())
@@ -184,7 +186,7 @@ def cmd_setup(a: argparse.Namespace) -> int:
         from kekkai import tools
         if IS_MACOS and not tools.nmap_status()["installed"] and sys.stdin.isatty():
             print("\n  nmap（LAN機器のサービスと版を特定し、脆弱性診断の精度を上げる）が入っていません。")
-            cmd_install_nmap(argparse.Namespace(method=None, yes=False, json=False))
+            cmd_install_nmap(argparse.Namespace(method=None, yes=False, json=False, terminal=True))
     print("\n  自己診断:")
     worst = doctor.print_report(doctor.run_checks(cfg, quick=True), COLOR)
     if not IS_MACOS or a.no_agent:
@@ -217,6 +219,8 @@ def cmd_install_nmap(a: argparse.Namespace) -> int:
         print("  nmap は導入済みです: %s（%s）" % (st["version"], st["path"]))
         return 0
     method = a.method or st["method"]
+    if getattr(a, "terminal", False):
+        os.environ["KEKKAI_PRIV"] = "sudo-tty"   # password typed in this Terminal window (sudo)
     if method == "brew":
         print("  Homebrew で nmap を入れます（パスワード不要・1〜5分）。")
     else:
@@ -236,9 +240,32 @@ def cmd_install_nmap(a: argparse.Namespace) -> int:
     res = tools.install_nmap(progress=lambda msg: print("  …", msg), prefer=method)
     for line in tools.describe_result(res):
         print("  " + line)
+    if res.get("ok"):
+        print("  この Mac で動くか確認します:")
+        rc = cmd_nmap_check(argparse.Namespace(json=False))
+        if rc != 0:
+            res["ok"] = False
     if a.json:
         print(dumps(res, indent=2))
     return 0 if res.get("ok") else 1
+
+
+def cmd_nmap_check(a: argparse.Namespace) -> int:
+    from kekkai import tools
+    from kekkai.platforms import get_platform
+    try:
+        gw = get_platform().lan_context().gateway
+    except Exception:  # noqa: BLE001 - the LAN step is then reported as unchecked
+        gw = None
+    res = tools.nmap_selftest(gw)
+    if a.json:
+        print(dumps(res, indent=2))
+    else:
+        print("  nmap の動作確認（この Mac で実行）")
+        for line in tools.selftest_lines(res):
+            print("   " + line)
+        print("  結果: %s（%.1f秒）" % ("動いています" if res["ok"] else "動いていません", res["duration"]))
+    return 0 if res["ok"] else 1
 
 
 def cmd_update(a: argparse.Namespace) -> int:
@@ -513,6 +540,10 @@ def cmd_install_agent(a: argparse.Namespace) -> int:
         print("sudo なしで実行してください（自動起動はログイン中のユーザーとして動かします）")
         return 2
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if "/AppTranslocation/" in root:
+        print("  KEKKAI.app を「アプリケーション」フォルダへ移動してから開いてください（ダウンロードした場所のままでは、"
+              "macOS が一時的な場所から起動するため、自動起動を登録できません）")
+        return 2
     logs = os.path.expanduser("~/Library/Logs")
     os.makedirs(logs, exist_ok=True)
     plist = {
@@ -713,8 +744,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("install-nmap", help="nmap（詳細診断）を公式の配布元から入れる（macOS）")
     s.add_argument("--method", choices=("brew", "pkg"), help="brew=Homebrew / pkg=nmap.org 公式インストーラー（既定: 自動）")
     s.add_argument("--yes", action="store_true", help="確認せずに実行")
+    s.add_argument("--terminal", action="store_true", help="パスワードをこのターミナルで入力する（sudo）")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_install_nmap)
+    s = sub.add_parser("nmap-check", help="nmap がこの Mac で実際に動くか確認（起動・版の特定・LAN接続）")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_nmap_check)
     s = sub.add_parser("vulnscan", help="脆弱性診断（このMac・自宅LANの機器・公開IP）")
     s.add_argument("--no-scan", action="store_true", help="nmapで機器を新たにスキャンせず、保存済みの情報で診断")
     s.add_argument("--offline", action="store_true", help="外部(NVD・Shodan)に問い合わせない")

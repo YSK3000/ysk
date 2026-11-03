@@ -31,7 +31,7 @@ const S = {
   posture: null, wifi: null, persistence: [], exposure: null, upnp: null, intel: null, ai: null, doctor: null,
   history: [], view: null, selectedMac: null, alertFilter: "active", trafficFilter: "internet", trafficQuery: "",
   reachable: false, geoHistory: false, geoRiskOnly: false, sse: false, lastConnFetch: 0, lastDevFetch: 0, aiBusy: {}, jobs: {},
-  vulnscan: null, vulnProgress: null, vulnFilter: "all", nmapInstall: null,
+  vulnscan: null, vulnProgress: null, vulnFilter: "all", nmapInstall: null, nmapCheck: null,
 };
 
 const UI = {};
@@ -212,6 +212,33 @@ function nmapInstallControl() {
     st.error ? h("p", { class: "danger small", role: "alert" }, st.error) : null);
 }
 
+// Evidence that nmap really works on this Mac: run it, identify a test service, reach the LAN.
+function nmapCheckView(res) {
+  if (!res || !res.steps) return null;
+  const mark = { true: "✓", false: "✗", null: "・" };
+  return h("div", { class: "nmap-check" },
+    h("ul", { class: "nmap-steps" }, res.steps.map((st) =>
+      h("li", { class: st.ok === false ? "danger" : st.ok ? "ok-text" : "muted" }, `${mark[String(st.ok)]} ${st.label}: ${st.detail}`))),
+    res.failed && res.failed.fix ? h("p", { class: "small", role: "alert" }, h("b", null, "直し方: "), res.failed.fix) : null);
+}
+
+function nmapCheckControl() {
+  const st = S.nmapCheck || {};
+  const btn = button(st.running ? "確認中…" : "動作確認", {
+    icon: "check", disabled: !!st.running, title: "この Mac で nmap を実際に動かして確認します（数秒〜1分）",
+    onclick: async () => {
+      S.nmapCheck = { running: true };
+      if (current) current.update();
+      try { S.nmapCheck = { result: await post("/api/tools/nmap/check", {}) }; }
+      catch (e) { S.nmapCheck = { error: String((e && e.message) || e) }; }
+      await refresh(["coverage", "vulnscan"]);
+      if (current) current.update();
+    } });
+  return h("div", { class: "nmap-install" }, btn,
+    st.error ? h("p", { class: "danger small", role: "alert" }, st.error) : null,
+    st.result ? nmapCheckView(st.result) : null);
+}
+
 function toast(alert) {
   const el = h("div", { class: ["toast", `sev-b-${alert.severity}`], role: "status",
                          onclick: () => { location.hash = "#alerts"; el.remove(); } },
@@ -333,7 +360,9 @@ Views.command = {
       add(this.coverage, h("div", { class: "coverage-grid" }, S.coverage.cards.map((card) =>
         h("div", { class: "coverage-card" }, h("b", null, card.label), card.id === "connections" ? (UI.connectionCoverage = h("p", null, monitorView(sm, S.reachable).label))
           : h("p", null, card.id === "nmap" && S.nmapInstall && S.nmapInstall.running ? "導入中です（完了まで数分。この画面はそのままで構いません）" : card.detail),
-          card.id === "nmap" && (card.installable || card.state === "installing" || S.nmapInstall) ? nmapInstallControl() : null,
+          card.id === "nmap" && (card.installable || card.state === "installing" || (S.nmapInstall && !card.checkable)) ? nmapInstallControl() : null,
+          card.id === "nmap" && card.fix ? h("p", { class: "small", role: "alert" }, h("b", null, "直し方: "), card.fix) : null,
+          card.id === "nmap" && card.checkable ? nmapCheckControl() : null,
           card.url ? h("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" }, "公式サイト") : h("span", { class: "muted small" }, card.action)))),
         h("p", { class: "muted small" }, S.coverage.limits.join(" ")));
     }
@@ -816,7 +845,8 @@ Views.vuln = {
           h("li", { class: `vc-${k}` }, h("b", null, String(s[k] || 0)), h("span", null, SEV_JA[k])))),
         s.exploited ? h("p", { class: "vuln-expl" }, icon("alerts"), `実際に悪用が確認された脆弱性を含む項目: ${s.exploited} 件`) : null,
         kv([["対象の機器", `${cov.devices || 0} 台（版を特定 ${cov.with_versions || 0} 台）`],
-            ["nmap", cov.nmap ? "あり（サービスの版を特定）" : "なし（機器の版は未特定）"],
+            ["nmap", !cov.nmap ? "なし（機器の版は未特定）" : v.nmap_check && v.nmap_check.ts
+              ? (v.nmap_check.ok ? "あり・動作確認済み" : "あり・動いていません（概要の「Nmap 詳細診断」を参照）") : "あり（動作は未確認）"],
             ["NVD照合", cov.nvd ? `${cov.nvd_queried || 0} 回（キャッシュ ${cov.nvd_cache_hits || 0} 件）${cov.nvd_rate_limited ? "・回数制限で一部未照合" : ""}`
                                 : "オフライン（製品名でKEV照合のみ）"],
             ["データ", `CISA KEV ${src.kev_version || "未取得"}・Apple更新情報 ${src.sofa_lines || 0} 系列`]]));
@@ -1031,11 +1061,13 @@ function connectSSE() {
     let d;
     try { d = JSON.parse(e.data); } catch (_) { return; }
     if (d.tool !== "nmap") return;
+    if (d.check) { S.nmapCheck = { result: d.check }; refresh(["coverage", "vulnscan"]).then(() => { if (current && (current.id === "vuln" || current.id === "command")) current.update(); }); return; }
     if (d.running) S.nmapInstall = { running: true, message: d.message };
     else {
       const r = d.result || {};
-      S.nmapInstall = r.ok ? { ok: true, message: `nmap ${r.version || ""} を使えるようになりました。「今すぐ診断」で機器の版まで調べられます` }
+      S.nmapInstall = r.ok ? { ok: true, message: `nmap ${r.version || ""} を入れ、この Mac で動くことを確認しました。「今すぐ診断」で機器の版まで調べられます` }
                            : { error: r.error || "nmap を入れられませんでした" };
+      if (r.check) S.nmapCheck = { result: r.check };
     }
     const show = () => { if (current && (current.id === "vuln" || current.id === "command")) current.update(); };
     if (d.running) show(); else refresh(["coverage", "vulnscan"]).then(show);

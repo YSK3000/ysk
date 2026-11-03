@@ -82,7 +82,7 @@ jobs:
     name: macOS Intel real monitoring and services
     # Standard x86_64 runner: https://github.com/actions/runner-images/issues/13045
     runs-on: macos-15-intel
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: kekkai
@@ -98,3 +98,5 @@ jobs:
         run: /usr/bin/python3 scripts/verify_live_local.py
       - name: auto-start, sensor detection, and cleanup on Intel
         run: scripts/ci_service.sh
+      - name: install nmap from nmap.org via KEKKAI on Intel, self-test, Terminal route
+        run: bash scripts/ci_nmap_pkg.sh

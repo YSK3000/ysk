@@ -173,12 +173,12 @@ class App:
         if path == "/api/vulnscan":
             with m.lock:
                 return {"result": m.state.get("vulnscan"), "running": bool(m.state.get("vulnscan_running")),
-                        "nmap": bool(m._deep_available())}
+                        "nmap": bool(m._deep_available()), "nmap_check": m.state.get("nmap_check")}
         if path == "/api/tools":
             from kekkai import tools
             with m.lock:
                 inst = dict(m.state.get("nmap_install") or {})
-            return {"nmap": dict(tools.nmap_status(), install=inst)}
+            return {"nmap": dict(tools.nmap_status(), install=inst, check=m.state.get("nmap_check"))}
         if path == "/api/report":
             from kekkai import report
             return {"markdown": report.markdown(m)}
@@ -259,6 +259,10 @@ class App:
             threading.Thread(target=_quiet(m.install_nmap), daemon=True, name="kekkai-install-nmap").start()
             return {"started": True, "method": st["method"], "needs_password": st["needs_password"],
                     "needs_rosetta": st["needs_rosetta"]}
+        if path == "/api/tools/nmap/check":
+            if not m._deep_available():
+                raise ApiError(409, "nmap が入っていません")
+            return m.nmap_check()
         if path == "/api/intel/update":
             threading.Thread(target=_quiet(lambda: m.intel_cycle(force=bool(body.get("force")))), daemon=True).start()
             return {"started": True}

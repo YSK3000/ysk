@@ -58,6 +58,7 @@ head -90 /tmp/btm.txt
 echo "==== 4) nmap deep scan (service/version detection, LAN-only guard on 127.0.0.1)"
 # KEKKAI's own installer (Homebrew route on this runner) — the same code the dashboard button runs
 PYTHONPATH=src "$PY" -m kekkai install-nmap --method brew --yes || { echo "FAIL: kekkai install-nmap (brew)"; exit 1; }
+PYTHONPATH=src "$PY" -m kekkai nmap-check || { echo "FAIL: nmap-check (Homebrew nmap)"; exit 1; }
 nmap --version | head -1
 NMAP_OUT=$(mktemp)
 if PYTHONPATH=src "$PY" -m kekkai portscan 127.0.0.1 --deep --json > "$NMAP_OUT"; then

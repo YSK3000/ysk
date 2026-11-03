@@ -237,6 +237,10 @@ def coverage_gaps(m: Any, vstat: Dict[str, Any], nvd: Optional[NVD], devices: Li
         gaps.append("このMacのmacOSの版を取得できませんでした。")
     if not m._deep_available():
         gaps.append("nmap が無いため機器のサービスの版を特定できていません（「nmapを入れる」で導入できます）。")
+    chk = (getattr(m, "state", {}) or {}).get("nmap_check") or {}
+    if chk.get("ts") and not chk.get("ok"):
+        f = chk.get("failed") or {}
+        gaps.append("nmap が正常に動いていません（%s: %s）。%s" % (f.get("label", ""), f.get("detail", ""), f.get("fix") or ""))
     elif devices and not with_versions:
         gaps.append("版を特定できた機器がありません（機器のスキャン前か、版を返さない機器です）。")
     if nvd is None:

@@ -199,6 +199,16 @@ def _admin_install(pkg: str, choices: Optional[str] = None, rosetta: bool = Fals
     if choices:
         inst += ["-applyChoiceChangesXML", choices]
     steps.append(inst)
+    if os.environ.get("KEKKAI_PRIV") == "sudo-tty":
+        # Terminal route: sudo asks for the password in the Terminal window the user is looking at
+        for step in steps:
+            try:
+                rc = subprocess.run(["/usr/bin/sudo"] + step, timeout=1800).returncode
+            except (OSError, subprocess.SubprocessError) as e:
+                return 1, str(e)
+            if rc != 0:
+                return rc, "sudo %s が失敗（rc=%s）" % (step[0], rc)
+        return 0, ""
     if os.environ.get("KEKKAI_PRIV") == "sudo":
         log_out = []
         for step in steps:
@@ -288,7 +298,7 @@ def _install_pkg(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any
         rc, out = _admin_install(pkg, choices, rosetta=need_rosetta)
         if rc != 0:
             cancelled = "-128" in out or "User canceled" in out or "キャンセル" in out
-            return {"ok": False, "method": "pkg", "cancelled": cancelled,
+            return {"ok": False, "method": "pkg", "cancelled": cancelled, "admin_failed": not cancelled,
                     "error": "インストールを取り消しました" if cancelled else
                     "インストーラーが失敗: %s（ターミナルで KEKKAI.app/Contents/Resources/kekkai/kekkai install-nmap "
                     "を実行しても導入できます）" % out}
@@ -325,6 +335,185 @@ def install_nmap(progress: Optional[Progress] = None, fetch: Callable[..., Any] 
         res = dict(res, ok=False, error="導入は終わりましたが nmap が見つかりません")
     res.update({"path": exe, "version": nmap_version(exe) if exe else None, "duration": round(time.time() - t0, 1)})
     return res
+
+
+def open_terminal_install() -> Tuple[bool, str]:
+    """Continue the install in a Terminal window (password typed there), when the macOS dialog could not be used.
+
+    The script is written by KEKKAI into its own data folder (not downloaded, so Gatekeeper does not stop it)
+    and only runs this copy's `kekkai install-nmap`.
+    """
+    import shlex
+    from kekkai import paths
+    launcher = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "kekkai")
+    if not os.access(launcher, os.X_OK):
+        return False, "KEKKAI の起動スクリプトが見つかりません: %s" % launcher
+    script = paths.sub("install-nmap.command")
+    body = ("#!/bin/sh\n"
+            "echo 'KEKKAI: nmap（nmap.org 公式）を入れます。'\n"
+            "echo 'Macのログインパスワードを入力して return を押してください（入力中の文字は表示されません）。'\n"
+            "%s install-nmap --yes --terminal --method pkg\n"
+            "echo; echo '--- 終わりました。このウインドウは閉じて構いません（KEKKAI の画面に結果が出ます）---'\n"
+            % shlex.quote(launcher))
+    with open(str(script), "w", encoding="utf-8") as f:
+        f.write(body)
+    os.chmod(str(script), 0o700)
+    try:
+        p = subprocess.run(["/usr/bin/open", "-a", "Terminal", str(script)], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, str(e)
+    return p.returncode == 0, (p.stderr or "").strip()
+
+
+# ------------------------------------------------------------------ self-test on this Mac
+_FAKE_BANNER = b"SSH-2.0-OpenSSH_9.6\r\n"
+
+
+def _banner_listener() -> Tuple[Any, int, Any]:
+    """A loopback TCP service that greets like OpenSSH 9.6, so nmap -sV has something real to identify."""
+    import socket
+    import threading
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(16)
+    srv.settimeout(0.5)
+    stop = threading.Event()
+
+    def serve() -> None:
+        while not stop.is_set():
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                continue
+            try:
+                c.sendall(_FAKE_BANNER)
+                c.settimeout(2)
+                try:
+                    c.recv(1024)
+                except OSError:
+                    pass
+            finally:
+                c.close()
+    threading.Thread(target=serve, daemon=True, name="kekkai-nmap-selftest").start()
+    return srv, srv.getsockname()[1], stop
+
+
+def _lan_reach(gateway: str) -> Tuple[Optional[bool], str]:
+    """Can this process open TCP connections to the router? (False = refused by macOS, None = no answer)."""
+    import errno
+    import socket
+    last = None
+    for port in (53, 80, 443):
+        sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sk.settimeout(1.5)
+        try:
+            rc = sk.connect_ex((gateway, port))
+        except OSError as e:
+            rc = e.errno or -1
+        finally:
+            sk.close()
+        if rc in (0, errno.ECONNREFUSED):
+            return True, "ルーター(%s)の%d番に到達" % (gateway, port)
+        last = rc
+    if last in (errno.EHOSTUNREACH, errno.ENETUNREACH, errno.EPERM, errno.EACCES):
+        return False, os.strerror(last)
+    return None, "ルーターの53/80/443番は応答なし"
+
+
+LAN_FIX = ("システム設定 →「プライバシーとセキュリティ」→「ローカルネットワーク」で、一覧にある KEKKAI または Python を"
+           "オンにし、KEKKAI.app を開き直してください")
+
+
+def nmap_selftest(gateway: Optional[str] = None) -> Dict[str, Any]:
+    """Prove on this Mac, step by step, that nmap runs and identifies services; say which step fails and why."""
+    from kekkai.discovery.nmap import command, parse_xml
+    from kekkai.util import run
+    t0 = time.time()
+    steps: List[Dict[str, Any]] = []
+
+    def add(sid: str, label: str, ok: Optional[bool], detail: str, fix: Optional[str] = None) -> None:
+        steps.append({"id": sid, "label": label, "ok": ok, "detail": detail, "fix": fix})
+
+    def done() -> Dict[str, Any]:
+        failed = [x for x in steps if x["ok"] is False]
+        identified = any(x["id"] == "service" and x["ok"] for x in steps)
+        return {"ok": not failed and identified, "steps": steps, "ts": time.time(),
+                "duration": round(time.time() - t0, 1), "failed": failed[0] if failed else None}
+
+    exe, env = command()
+    if not exe:
+        add("found", "nmap の場所", False, "nmap が見つかりません", "「nmapを入れる」で導入してください")
+        return done()
+    add("found", "nmap の場所", True, exe)
+    p_env = dict(os.environ, **(env or {}))
+    try:
+        p = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60, env=p_env)
+        out, err, rc = p.stdout, p.stderr, p.returncode
+    except OSError as e:
+        out, err, rc = "", str(e), 126
+    except subprocess.SubprocessError as e:
+        out, err, rc = "", str(e), 124
+    m = re.search(r"Nmap version (\S+)", out)
+    if rc != 0 or not m:
+        why = (err or out).strip()[-300:] or "rc=%s" % rc
+        fix = None
+        if "Bad CPU type" in why or "[Errno 86]" in why or (apple_silicon() and not rosetta_ready()):
+            fix = "Apple の Rosetta 2 が必要です。もう一度「nmapを入れる」を押すと一緒に入ります"
+        elif "Library not loaded" in why or "dyld" in why:
+            fix = "nmap の付属ライブラリが読めません。nmap.app を削除して「nmapを入れる」をやり直してください"
+        add("runs", "nmap の起動", False, why, fix or "「nmapを入れる」をやり直してください")
+        return done()
+    add("runs", "nmap の起動", True, "Nmap %s" % m.group(1))
+
+    srv, port, stop = _banner_listener()
+    try:
+        rc, xml, err = run([exe, "-sV", "--version-light", "-Pn", "-p", str(port), "-oX", "-", "--", "127.0.0.1"],
+                           timeout=120, env=env)
+    finally:
+        stop.set()
+        srv.close()
+    found = []
+    if rc == 0:
+        try:
+            found = [x for x in parse_xml(xml) if x.get("port") == port]
+        except Exception:  # noqa: BLE001 - malformed output is a failure, reported below
+            found = []
+    if found and (found[0].get("product") or "").lower().startswith("openssh"):
+        add("service", "サービスと版の特定", True, "テスト用のサービスを %s %s と特定" % (
+            found[0].get("product"), found[0].get("version") or ""))
+    else:
+        add("service", "サービスと版の特定", False,
+            (err.strip()[-300:] if rc != 0 else "ポートは見えたが製品名を特定できず: %r" % (found[:1],)),
+            "nmap のデータファイルが壊れている可能性。nmap.app を削除して「nmapを入れる」をやり直してください")
+        return done()
+
+    if not gateway:
+        add("lan", "自宅LANへの接続", None, "ルーターが分からないため未確認")
+        return done()
+    reach, why = _lan_reach(gateway)
+    if reach is False:
+        add("lan", "自宅LANへの接続", False, "macOS がLANへの接続を止めています（%s）" % why, LAN_FIX)
+        return done()
+    rc, xml, err = run([exe, "-Pn", "-sT", "-p", "53,80,443", "-oX", "-", "--", gateway], timeout=60, env=env)
+    states = re.findall(r'<state state="(\w+)"', xml or "")
+    if rc != 0:
+        add("lan", "自宅LANへの接続", False, "nmap がルーターを調べられません: %s" % err.strip()[-200:], LAN_FIX)
+    elif states and all(st == "filtered" for st in states) and reach:
+        add("lan", "自宅LANへの接続", False, "KEKKAI はルーターに届くのに nmap からは届きません（ポートが全て filtered）",
+            LAN_FIX)
+    else:
+        add("lan", "自宅LANへの接続", True if reach else None,
+            "nmap でルーター(%s)を確認: %s" % (gateway, ", ".join(sorted(set(states))) or "応答なし"))
+    return done()
+
+
+def selftest_lines(res: Dict[str, Any]) -> List[str]:
+    mark = {True: "✓", False: "✗", None: "・"}
+    lines = ["%s %s: %s" % (mark[x["ok"]], x["label"], x["detail"]) for x in res.get("steps", [])]
+    if res.get("failed") and res["failed"].get("fix"):
+        lines.append("→ 直し方: " + res["failed"]["fix"])
+    return lines
 
 
 def describe_result(res: Dict[str, Any]) -> List[str]:

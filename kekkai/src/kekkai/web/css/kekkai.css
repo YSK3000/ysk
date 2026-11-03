@@ -568,3 +568,6 @@ h4 { font-size: 11px; font-family: var(--mono); letter-spacing: .16em; color: va
 .nmap-install { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 6px 0 2px; }
 .nmap-install p { margin: 0; }
 .nmap-install .ok-text { color: var(--ok); }
+.nmap-steps { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; line-height: 1.55; }
+.nmap-steps li { margin: 0; overflow-wrap: anywhere; }
+.nmap-check p { margin: 4px 0 0; overflow-wrap: anywhere; }

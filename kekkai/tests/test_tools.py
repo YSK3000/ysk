@@ -281,5 +281,139 @@ class RefreshAgentTest(unittest.TestCase):
             self.assertIsNone(self.cli.refresh_agent())
 
 
+
+class SelfTestTest(unittest.TestCase):
+    """nmap_selftest must say which step fails on this Mac, and never report 'working' without identifying a service."""
+
+    def test_not_installed(self):
+        with mock.patch("kekkai.discovery.nmap.command", return_value=(None, None)):
+            res = tools.nmap_selftest("192.168.1.1")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["failed"]["id"], "found")
+        self.assertIn("nmapを入れる", res["failed"]["fix"])
+
+    def test_cannot_run_points_to_rosetta(self):
+        with mock.patch("kekkai.discovery.nmap.command", return_value=("/x/nmap", None)), \
+                mock.patch.object(tools.subprocess, "run", side_effect=OSError(86, "Bad CPU type in executable")), \
+                mock.patch.object(tools, "apple_silicon", return_value=True), \
+                mock.patch.object(tools, "rosetta_ready", return_value=False):
+            res = tools.nmap_selftest("192.168.1.1")
+        self.assertEqual(res["failed"]["id"], "runs")
+        self.assertIn("Rosetta", res["failed"]["fix"])
+
+    def _with_fake_nmap(self, xml_for_service, lan_reach, lan_xml='<state state="closed"/>'):
+        runs = []
+
+        def fake_util_run(cmd, timeout=None, env=None):
+            runs.append(cmd)
+            if "127.0.0.1" in cmd:
+                port = cmd[cmd.index("-p") + 1]
+                return 0, xml_for_service.replace("PORT", port), ""
+            return 0, "<nmaprun><host><ports><port portid='53'>%s</port></ports></host></nmaprun>" % lan_xml, ""
+        ver = mock.Mock(returncode=0, stdout="Nmap version 7.993 ( https://nmap.org )\n", stderr="")
+        with mock.patch("kekkai.discovery.nmap.command", return_value=("/x/nmap", None)), \
+                mock.patch.object(tools.subprocess, "run", return_value=ver), \
+                mock.patch("kekkai.util.run", fake_util_run), \
+                mock.patch.object(tools, "_lan_reach", return_value=lan_reach):
+            return tools.nmap_selftest("192.168.1.1"), runs
+
+    def test_all_steps_pass(self):
+        xml = ('<nmaprun><host><ports><port protocol="tcp" portid="PORT"><state state="open"/>'
+               '<service name="ssh" product="OpenSSH" version="9.6"/></port></ports></host></nmaprun>')
+        res, runs = self._with_fake_nmap(xml, (True, "ok"))
+        self.assertTrue(res["ok"], res)
+        self.assertEqual([x["id"] for x in res["steps"]], ["found", "runs", "service", "lan"])
+
+    def test_service_not_identified_is_a_failure(self):
+        xml = '<nmaprun><host><ports><port protocol="tcp" portid="PORT"><state state="open"/></port></ports></host></nmaprun>'
+        res, _ = self._with_fake_nmap(xml, (True, "ok"))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["failed"]["id"], "service")
+
+    def test_lan_blocked_by_macos_explains_the_setting(self):
+        xml = ('<nmaprun><host><ports><port protocol="tcp" portid="PORT"><state state="open"/>'
+               '<service name="ssh" product="OpenSSH" version="9.6"/></port></ports></host></nmaprun>')
+        res, _ = self._with_fake_nmap(xml, (False, "No route to host"))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["failed"]["id"], "lan")
+        self.assertIn("ローカルネットワーク", res["failed"]["fix"])
+
+    def test_nmap_filtered_while_python_reaches_router(self):
+        xml = ('<nmaprun><host><ports><port protocol="tcp" portid="PORT"><state state="open"/>'
+               '<service name="ssh" product="OpenSSH" version="9.6"/></port></ports></host></nmaprun>')
+        res, _ = self._with_fake_nmap(xml, (True, "ok"), lan_xml='<state state="filtered"/>')
+        self.assertEqual(res["failed"]["id"], "lan")
+
+    @unittest.skipUnless(__import__("shutil").which("nmap"), "nmap not installed here")
+    def test_real_nmap_identifies_the_test_service(self):
+        res = tools.nmap_selftest(None)
+        self.assertTrue(res["ok"], tools.selftest_lines(res))
+
+
+class CoverageEvidenceTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        cfg = config.Config(copy.deepcopy(config.DEFAULTS), "unused")
+        self.store = Store(str(Path(self.tmp.name) / "t.db"))
+        self.addCleanup(self.store.close)
+        self.m = Monitor(cfg, self.store, StubPlatform())
+
+    def card(self):
+        from kekkai.coverage import describe
+        with mock.patch("kekkai.coverage.find_cmd", return_value="/x/nmap"):
+            return {c["id"]: c for c in describe(self.m)["cards"]}["nmap"]
+
+    def test_installed_is_not_claimed_working_until_proven(self):
+        self.m.state["nmap_check"] = None
+        self.assertEqual(self.card()["state"], "unverified")
+        self.m.state["nmap_check"] = {"ok": True, "ts": __import__("time").time(), "steps": []}
+        self.assertEqual(self.card()["state"], "active")
+        self.m.state["nmap_check"] = {"ok": False, "ts": __import__("time").time(), "steps": [],
+                                      "failed": {"label": "自宅LANへの接続", "detail": "No route to host", "fix": tools.LAN_FIX}}
+        card = self.card()
+        self.assertEqual(card["state"], "broken")
+        self.assertIn("No route to host", card["detail"])
+        self.assertEqual(card["fix"], tools.LAN_FIX)
+
+    def test_dialog_failure_continues_in_terminal(self):
+        present = {"v": False}
+        self.m._deep_available = lambda: present["v"]
+        self.m._install_nmap = lambda progress=None, prefer=None: {"ok": False, "method": "pkg", "admin_failed": True,
+                                                                     "error": "No user interaction allowed"}
+
+        def opener():
+            present["v"] = True        # the user typed the password in Terminal
+            return True, ""
+        self.m._open_terminal_install = opener
+        self.m.bus.publish = lambda *a, **k: None
+        with mock.patch.object(self.m, "nmap_check", return_value={"ok": True, "steps": []}), \
+                mock.patch.object(tools, "nmap_version", return_value="7.993"):
+            res = self.m.install_nmap()
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["method"], "pkg-terminal")
+
+    def test_install_that_does_not_work_is_reported_as_failure(self):
+        self.m._install_nmap = lambda progress=None, prefer=None: {"ok": True, "method": "brew"}
+        self.m.bus.publish = lambda *a, **k: None
+        broken = {"ok": False, "steps": [], "failed": {"label": "nmap の起動", "detail": "dyld: Library not loaded", "fix": "やり直し"}}
+        with mock.patch.object(self.m, "nmap_check", return_value=broken):
+            res = self.m.install_nmap()
+        self.assertFalse(res["ok"])
+        self.assertIn("動作確認で失敗", res["error"])
+
+
+class TranslocationTest(unittest.TestCase):
+    def test_temporary_copy_is_never_registered(self):
+        from kekkai import cli
+        moved = "/private/var/folders/ab/T/AppTranslocation/1234/d/KEKKAI.app/Contents/Resources/kekkai/src"
+        with mock.patch.object(cli, "IS_MACOS", True), mock.patch.object(cli, "_code_root", return_value=moved), \
+                mock.patch("os.path.exists", return_value=True):
+            self.assertIsNone(cli.refresh_agent())
+        with mock.patch.object(cli, "IS_MACOS", True), mock.patch("os.geteuid", return_value=501), \
+                mock.patch("os.path.abspath", return_value=moved + "/kekkai/cli.py"):
+            self.assertEqual(cli.cmd_install_agent(__import__("argparse").Namespace()), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -58,6 +58,21 @@ assert web and web[0].get("product"), "8080 found without product/version: %r" %
 print("PASS nmap.org nmap identified %s %s on 8080" % (web[0].get("product"), web[0].get("version")))
 PY
 
+echo "==== 3b) KEKKAI's own self-test on this Mac (run nmap, identify a test service, reach the LAN)"
+$PY -m kekkai nmap-check || fail "nmap-check after the official installer"
+
+echo "==== 3c) when the macOS password dialog cannot be used: KEKKAI opens Terminal and finishes there"
+sudo rm -rf /Applications/nmap.app
+for id in $(pkgutil --pkgs | grep org.insecure.nmap); do sudo pkgutil --forget "$id" >/dev/null; done
+$PY -c "from kekkai.util import find_cmd; import sys; sys.exit(1 if find_cmd('nmap') else 0)" || fail "nmap still present before the Terminal test"
+$PY -c "from kekkai import tools; ok, why = tools.open_terminal_install(); print('open Terminal:', ok, why); import sys; sys.exit(0 if ok else 1)" \
+  || fail "could not open Terminal"
+for _ in $(seq 150); do [ -x /Applications/nmap.app/Contents/MacOS/nmap ] && break; sleep 2; done
+[ -x /Applications/nmap.app/Contents/MacOS/nmap ] || { screencapture -x /tmp/kekkai-terminal.png 2>/dev/null; fail "Terminal route did not install nmap within 5 minutes"; }
+sleep 3
+$PY -m kekkai nmap-check || fail "nmap-check after the Terminal route"
+echo "PASS Terminal route installed nmap and it works"
+
 echo "==== 4) the administrator dialog script: argument quoting at runtime, and syntax of the admin form"
 $PY - <<'PY' || exit 1
 import subprocess
