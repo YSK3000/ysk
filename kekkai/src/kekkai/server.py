@@ -31,6 +31,7 @@ from kekkai.util import atomic_write, dumps, log
 
 COOKIE = "kekkai_session"
 MAX_BODY = 64 * 1024
+DRAIN_MAX = 1024 * 1024
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; "
        "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -438,6 +439,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(400, "bad Content-Length")
         if length < 0 or length > MAX_BODY:
             self.close_connection = True
+            # Read and discard a moderately oversized body before answering: closing with unread data makes
+            # the OS send a TCP reset, and the client then gets "connection reset" instead of the 413
+            # (seen intermittently on the Intel macOS runner). Huge bodies are not read; the reset is fine there.
+            if 0 < length <= DRAIN_MAX:
+                try:
+                    self.connection.settimeout(5)
+                    remaining = length
+                    while remaining > 0:
+                        chunk = self.rfile.read(min(65536, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                except OSError:
+                    pass
             return self._error(413, "body too large")
         raw = self.rfile.read(length) if length else b""
         if not self._host_ok():
