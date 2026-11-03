@@ -6,6 +6,8 @@ from kekkai.util import find_cmd
 
 
 def _ago(sec):
+    if sec < 60:
+        return "たった今"
     if sec < 3600:
         return "%d分前" % max(1, sec // 60)
     if sec < 86400 * 2:
