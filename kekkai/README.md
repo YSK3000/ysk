@@ -99,7 +99,7 @@ KEKKAI を更新（`git pull`）したら `sudo ./kekkai install-sensor` をも�
 
 | 追加するもの | コマンド | 効果 |
 |---|---|---|
-| nmap | ダッシュボードの「nmapを入れる」または `./kekkai install-nmap` | 「詳細スキャン」と脆弱性診断で、機器のサービスと版まで特定。Homebrew があれば `brew install nmap`、無ければ nmap.org 公式インストーラー（公式の SHA-256 と照合し、macOS のパスワード画面で導入。nmap 本体のみ。公式版は Intel 用のため Apple Silicon では Rosetta 2 も入る） |
+| nmap | 不要（KEKKAI が自動で導入。`./kekkai install-nmap` でも可） | 「詳細スキャン」と脆弱性診断で、機器のサービスと版まで特定。起動時に nmap が無ければ自動で導入→この Mac での動作確認→脆弱性診断のやり直しまで行う。Homebrew があれば `brew install nmap`、無ければ nmap.org 公式の配布物を公式の SHA-256 と照合して KEKKAI のフォルダに展開（パスワード不要）。公式版は Intel 用のため、Rosetta 2 の無い Apple Silicon でだけ macOS のパスワード画面が1回出る。`tools.auto_install_nmap: false` で無効化 |
 | Ollama + モデル | `brew install ollama` → `ollama serve` → `ollama pull qwen3:8b` など | AI解説をMac内で完結（MacBook Proなら快適） |
 | Claude（クラウド） | `python3 -m pip install anthropic` ＋ `ANTHROPIC_API_KEY` ＋ 設定 `ai.provider: "anthropic"` | 明示的に選択した場合のみ送信。既定ではMAC末尾・判明している自宅の公開IPを伏せますが、完全な匿名化ではありません |
 
@@ -124,7 +124,8 @@ sudo ./kekkai install-sensor         パケットセンサーを常時監視に�
 ./kekkai exposure                    インターネットから見た自宅
 ./kekkai portscan 192.168.1.20 [--deep|--tcp]  LAN内機器のポートスキャン（プライベートIPのみ。nmapがあれば自動で版も特定）
 ./kekkai vulnscan [--no-scan] [--offline]  脆弱性診断（このMac・LANの機器・公開IP。高以上があれば終了コード3）
-./kekkai install-nmap [--method brew|pkg]   nmap を公式の配布元から入れる（確認のうえ実行）
+./kekkai install-nmap [--method brew|local|pkg]  nmap を公式の配布元から入れる（通常は自動。local=パスワード不要）
+./kekkai nmap-check                         nmap がこの Mac で動くか確認（起動・版の特定・LAN接続）
 ./kekkai lookup 1.2.3.4 [--external] IPの照会（GeoIP・脅威リスト・Shodan/GreyNoise）
 ./kekkai report [--out report.md]    Markdownレポート（家族やAIへの相談用）
 ./kekkai update [--force]            GeoIP・脅威リストの更新（自動でも12時間ごと）

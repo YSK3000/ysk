@@ -113,7 +113,7 @@ class InstallFlowTest(unittest.TestCase):
             if url.endswith(".digest.txt"):
                 return 200, {}, DIGEST.encode()
             return 200, {}, b"not the official image"
-        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "find_cmd", return_value=None), \
+        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "_nmap_exe", return_value=None), \
                 mock.patch.object(tools, "brew_path", return_value=None), \
                 mock.patch.object(tools, "_admin_install", side_effect=AssertionError("must not install")):
             res = tools.install_nmap(fetch=fetch)
@@ -123,7 +123,7 @@ class InstallFlowTest(unittest.TestCase):
     def test_missing_official_checksum_aborts(self):
         def fetch(url, **kw):
             return (200, {}, b"nmap-7.993.dmg") if url.endswith("download.html") else (404, {}, b"")
-        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "find_cmd", return_value=None), \
+        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "_nmap_exe", return_value=None), \
                 mock.patch.object(tools, "brew_path", return_value=None):
             res = tools.install_nmap(fetch=fetch)
         self.assertFalse(res["ok"])
@@ -134,7 +134,7 @@ class InstallFlowTest(unittest.TestCase):
             self.assertFalse(tools.install_nmap()["ok"])
 
     def test_already_installed_is_a_no_op(self):
-        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "find_cmd", return_value="/x/nmap"), \
+        with mock.patch.object(tools, "IS_MACOS", True), mock.patch.object(tools, "_nmap_exe", return_value="/x/nmap"), \
                 mock.patch.object(tools, "nmap_version", return_value="7.993"):
             res = tools.install_nmap(fetch=lambda *a, **k: self.fail("no download when present"))
         self.assertTrue(res["ok"] and res["already"])
@@ -220,7 +220,7 @@ class MonitorInstallTest(unittest.TestCase):
                 raise AssertionError(card)
             return {"ok": False, "error": "テスト用の失敗"}
         self.m._install_nmap = fake_install
-        with mock.patch("kekkai.coverage.find_cmd", return_value=None):
+        with mock.patch("kekkai.coverage.nmap_available", return_value=False):
             res = self.m.install_nmap()
             card = {c["id"]: c for c in describe(self.m)["cards"]}["nmap"]
         self.assertFalse(res["ok"])
@@ -390,7 +390,7 @@ class CoverageEvidenceTest(unittest.TestCase):
 
     def card(self):
         from kekkai.coverage import describe
-        with mock.patch("kekkai.coverage.find_cmd", return_value="/x/nmap"):
+        with mock.patch("kekkai.coverage.nmap_available", return_value=True):
             return {c["id"]: c for c in describe(self.m)["cards"]}["nmap"]
 
     def test_installed_is_not_claimed_working_until_proven(self):
@@ -411,7 +411,7 @@ class CoverageEvidenceTest(unittest.TestCase):
         self.m._install_nmap = lambda progress=None, prefer=None: {"ok": False, "method": "pkg", "admin_failed": True,
                                                                      "error": "No user interaction allowed"}
 
-        def opener():
+        def opener(method="local"):
             present["v"] = True        # the user typed the password in Terminal
             return True, ""
         self.m._open_terminal_install = opener
@@ -420,7 +420,7 @@ class CoverageEvidenceTest(unittest.TestCase):
                 mock.patch.object(tools, "nmap_version", return_value="7.993"):
             res = self.m.install_nmap()
         self.assertTrue(res["ok"], res)
-        self.assertEqual(res["method"], "pkg-terminal")
+        self.assertEqual(res["method"], "terminal")
 
     def test_install_that_does_not_work_is_reported_as_failure(self):
         self.m._install_nmap = lambda progress=None, prefer=None: {"ok": True, "method": "brew"}
@@ -442,6 +442,122 @@ class TranslocationTest(unittest.TestCase):
         with mock.patch.object(cli, "IS_MACOS", True), mock.patch("os.geteuid", return_value=501), \
                 mock.patch("os.path.abspath", return_value=moved + "/kekkai/cli.py"):
             self.assertEqual(cli.cmd_install_agent(__import__("argparse").Namespace()), 2)
+
+
+
+class LocalInstallTest(unittest.TestCase):
+    """No-password route: nmap.org's package unpacked into KEKKAI's folder, found and used from there."""
+
+    def make_tree(self, root):
+        import os
+        app = os.path.join(root, "nmap.pkg", "Payload", "nmap.app", "Contents")
+        for rel in ("MacOS/nmap", "Resources/bin/nmap"):
+            path = os.path.join(app, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(path, 0o755)
+        os.makedirs(os.path.join(app, "Resources", "share", "nmap"), exist_ok=True)
+        return os.path.dirname(app)
+
+    def test_find_app_in_expanded_package(self):
+        with tempfile.TemporaryDirectory() as d:
+            want = self.make_tree(d)
+            self.assertEqual(tools.find_app_in(d), want)
+            self.assertIsNone(tools.find_app_in(tempfile.gettempdir() + "/does-not-exist"))
+
+    def run_local(self, rosetta_ok=True, admin_rc=0):
+        import os
+        from kekkai.discovery import nmap as nmapmod
+
+        def fake_run(cmd, **kw):
+            if cmd[:2] == ["/usr/sbin/pkgutil", "--expand-full"]:
+                self.make_tree(cmd[3])
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        admin = mock.Mock(return_value=(admin_rc, "" if admin_rc == 0 else "execution error: User canceled. (-128)"))
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"KEKKAI_HOME": home}), \
+                mock.patch.object(tools, "_official_package", return_value={
+                    "ok": True, "dmg": "nmap-7.993.dmg", "sha256": "ab" * 32, "pkg": "/mnt/nmap-7.993.mpkg",
+                    "mnt": "/mnt", "signer": "Apple署名なし"}), \
+                mock.patch.object(tools, "_detach"), mock.patch.object(tools.subprocess, "run", fake_run), \
+                mock.patch.object(tools, "rosetta_ready", return_value=rosetta_ok), \
+                mock.patch.object(tools, "_admin_run", admin):
+            res = tools._install_local(lambda m: None, fetch=None)
+            with mock.patch.object(nmapmod, "find_cmd", return_value=None):
+                exe, env = nmapmod.command()
+            return res, exe, env, admin, home
+
+    def test_unpacked_into_kekkai_folder_without_password(self):
+        res, exe, env, admin, home = self.run_local()
+        self.assertTrue(res["ok"], res)
+        self.assertTrue(res["installed_to"].startswith(home))
+        self.assertTrue(exe.startswith(home) and exe.endswith("/Resources/bin/nmap"))
+        self.assertIn("NMAPDIR", env)
+        admin.assert_not_called()                       # nothing privileged when Rosetta is already there
+
+    def test_rosetta_is_the_only_password_step(self):
+        res, _exe, _env, admin, _home = self.run_local(rosetta_ok=False)
+        self.assertTrue(res["ok"] and res["rosetta_installed"])
+        steps = admin.call_args[0][0]
+        self.assertEqual(steps, [["/usr/sbin/softwareupdate", "--install-rosetta", "--agree-to-license"]])
+
+    def test_rosetta_cancel_is_reported(self):
+        res, *_ = self.run_local(rosetta_ok=False, admin_rc=1)
+        self.assertFalse(res["ok"])
+        self.assertTrue(res["cancelled"] and res["rosetta_needed"])
+
+
+class AutoInstallTest(unittest.TestCase):
+    """KEKKAI installs nmap by itself: no button, then proves it and re-runs the assessment."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.cfg = config.Config(copy.deepcopy(config.DEFAULTS), "unused")
+        self.store = Store(str(Path(self.tmp.name) / "t.db"))
+        self.addCleanup(self.store.close)
+        self.m = Monitor(self.cfg, self.store, StubPlatform())
+        self.m.bus.publish = lambda *a, **k: None
+        self.present = {"v": False}
+        self.m._deep_available = lambda: self.present["v"]
+        self.calls = []
+
+    def fake_install(self, ok=True, cancelled=False):
+        def inst(progress=None, prefer=None):
+            self.calls.append(prefer)
+            self.present["v"] = ok
+            return {"ok": ok, "method": "local", "cancelled": cancelled, "error": None if ok else "x"}
+        self.m._install_nmap = inst
+
+    def test_installs_checks_and_reassesses_without_user_action(self):
+        import threading
+        self.fake_install()
+        ran = threading.Event()
+        with mock.patch("kekkai.monitor.IS_MACOS", True), \
+                mock.patch.object(self.m, "nmap_check", return_value={"ok": True, "steps": []}), \
+                mock.patch.object(self.m, "run_vulnscan", side_effect=lambda *a, **k: ran.set()):
+            res = self.m.nmap_auto_cycle()
+            self.assertTrue(ran.wait(5), "assessment was not re-run after installing nmap")
+        self.assertTrue(res["ok"])
+        self.assertEqual(self.calls, [None])
+        self.assertIsNone(self.m.nmap_auto_cycle())     # present now: nothing more to do
+
+    def test_failed_attempt_waits_before_retrying(self):
+        self.fake_install(ok=False)
+        with mock.patch("kekkai.monitor.IS_MACOS", True):
+            self.m.nmap_auto_cycle()
+            self.assertIsNone(self.m.nmap_auto_cycle())   # within the 6-hour back-off
+        self.assertEqual(len(self.calls), 1)
+
+    def test_can_be_turned_off_and_is_macos_only(self):
+        self.fake_install()
+        self.cfg.set("tools.auto_install_nmap", False)
+        with mock.patch("kekkai.monitor.IS_MACOS", True):
+            self.assertIsNone(self.m.nmap_auto_cycle())
+        self.cfg.set("tools.auto_install_nmap", True)
+        with mock.patch("kekkai.monitor.IS_MACOS", False):
+            self.assertIsNone(self.m.nmap_auto_cycle())
+        self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":

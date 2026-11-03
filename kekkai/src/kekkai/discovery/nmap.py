@@ -11,30 +11,44 @@ from kekkai.discovery.portscan import SERVICES, _check_scope
 from kekkai.util import find_cmd, run
 
 
-def available() -> bool:
-    return find_cmd("nmap") is not None
+def local_app() -> str:
+    """Where KEKKAI keeps the nmap it installs itself (inside the user's KEKKAI folder: no password needed)."""
+    from kekkai import paths
+    return str(paths.data_dir() / "tools" / "nmap.app")
+
+
+def _bundle(app: str) -> Optional[Tuple[str, Dict[str, str]]]:
+    res = app + "/Contents/Resources"
+    real = res + "/bin/nmap"
+    if os.path.isfile(real) and os.access(real, os.X_OK):
+        env = {"DYLD_LIBRARY_PATH": res + "/lib"}
+        if os.path.isdir(res + "/share/nmap"):
+            env["NMAPDIR"] = res + "/share/nmap"
+        return real, env
+    return None
 
 
 def command() -> Tuple[Optional[str], Optional[Dict[str, str]]]:
     """The nmap executable to run, plus any environment it needs.
 
-    nmap.org's macOS installer puts a shell launcher at nmap.app/Contents/MacOS/nmap. On a real macOS 26
-    runner, `-sV ... --top-ports 200 -oX - -- <ip>` through that launcher failed with "--top-ports should be
-    an integer", so the bundled binary is run directly with the library and data paths the launcher sets.
+    Order: an nmap on PATH / Homebrew / nmap.org's /Applications install, then the copy KEKKAI installed into
+    its own folder. nmap.org's app bundle puts a shell launcher at nmap.app/Contents/MacOS/nmap; the bundled
+    binary is run directly with the library and data paths that launcher sets.
     """
     exe = find_cmd("nmap")
-    if not exe:
-        return None, None
-    m = re.match(r"^(.*/nmap\.app)/Contents/MacOS/nmap$", exe)
-    if m:
-        res = m.group(1) + "/Contents/Resources"
-        real = res + "/bin/nmap"
-        if os.path.isfile(real) and os.access(real, os.X_OK):
-            env = {"DYLD_LIBRARY_PATH": res + "/lib"}
-            if os.path.isdir(res + "/share/nmap"):
-                env["NMAPDIR"] = res + "/share/nmap"
-            return real, env
-    return exe, None
+    if exe:
+        m = re.match(r"^(.*/nmap\.app)/Contents/MacOS/nmap$", exe)
+        if m:
+            b = _bundle(m.group(1))
+            if b:
+                return b
+        return exe, None
+    b = _bundle(local_app())
+    return b if b else (None, None)
+
+
+def available() -> bool:
+    return command()[0] is not None
 
 
 def parse_xml(text: str) -> List[Dict[str, Any]]:

@@ -2,7 +2,7 @@
 import sys
 import time
 from pathlib import Path
-from kekkai.util import find_cmd
+from kekkai.discovery.nmap import available as nmap_available
 
 
 def _ago(sec):
@@ -71,9 +71,9 @@ def _nmap_card(monitor, nmap: bool):
         return dict(card, state="broken", detail="動いていません（%s の確認）: %s — %s" % (
             when, f.get("label", ""), f.get("detail", "")), fix=f.get("fix"))
     if inst.get("running"):
-        return dict(card, state="installing", detail="導入中: %s" % (inst.get("message") or ""))
+        return dict(card, state="installing", detail="自動で導入中（操作は不要です）: %s" % (inst.get("message") or ""))
     last = inst.get("result") or {}
-    detail = "未導入。機器のサービスの版を調べられず、脆弱性診断が不完全になります（標準のTCPスキャンのみ）"
+    detail = "未導入。KEKKAI が自動で導入します（起動から1分ほど。操作は不要です）"
     if last and not last.get("ok"):
         detail = "未導入（前回の導入は失敗: %s）" % last.get("error", "")
     return dict(card, state="unavailable", detail=detail, installable=sys.platform == "darwin")
@@ -89,7 +89,7 @@ def describe(monitor):
     sensor = monitor.sensor_status()
     beat = sensor.get("last_beat")
     capturing = bool(sensor.get("active") and beat and 0 <= now - beat < 30)
-    nmap = bool(find_cmd("nmap"))
+    nmap = nmap_available()
     lulu = any(p.exists() for p in (Path('/Applications/LuLu.app'), Path.home() / 'Applications/LuLu.app'))
     cards = [
         {"id": "connections", "label": "このMacの通信", "state": state["status"],

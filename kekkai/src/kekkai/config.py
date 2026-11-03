@@ -20,6 +20,10 @@ DEFAULTS: Dict[str, Any] = {
         "vulnscan_interval_sec": 604800,    # weekly vulnerability assessment (脆弱性診断)
         "learning_cycles": 2,          # first cycles only build the baseline
     },
+    "tools": {
+        "auto_install_nmap": True,     # macOS: install nmap by itself when missing (Homebrew, else nmap.org's
+                                       # package unpacked into KEKKAI's folder, no password), then self-test it
+    },
     "vulnscan": {
         "use_nvd": True,               # look up detected product versions in NIST NVD (sends only CPE strings)
         "scan_devices": True,          # nmap -sV each LAN device first (private addresses only; needs nmap)

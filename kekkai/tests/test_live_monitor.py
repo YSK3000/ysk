@@ -145,7 +145,7 @@ class LiveMonitorTest(unittest.TestCase):
 
     def test_coverage_does_not_treat_installation_as_protection(self):
         from kekkai.coverage import describe
-        with patch("kekkai.coverage.find_cmd", return_value=None), patch("pathlib.Path.exists", return_value=False):
+        with patch("kekkai.coverage.nmap_available", return_value=False), patch("pathlib.Path.exists", return_value=False):
             cards = {c["id"]: c for c in describe(self.m)["cards"]}
         self.assertEqual(cards["connections"]["state"], "starting")
         self.assertEqual(cards["sensor"]["state"], "inactive")

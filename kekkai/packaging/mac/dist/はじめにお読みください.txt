@@ -24,18 +24,19 @@
   3. 「“KEKKAI”が“ターミナル”を制御するアクセスを要求しています。」と出たら「許可」を押す
      （初回セットアップの進み具合をターミナルに表示するためです）。
   4. 自動セットアップ（数分）→ ブラウザでダッシュボードが開きます。
-     途中で「nmap を入れますか？」と聞かれたら Enter（おすすめ。下の「nmap」参照）。
   以後はダブルクリックで開き、ログイン中はバックグラウンドで監視が続きます。
 
-■ nmap（詳細診断）— おすすめ
-  LANの機器で動いているソフトの名前と版を調べ、脆弱性診断の精度を上げます。
-  ダッシュボードの「防御機能の稼働状況」→「Nmap 詳細診断」→「nmapを入れる」で入ります。
-  ・Homebrew が入っているMac: brew install nmap を自動で実行（パスワード不要）。
-  ・Homebrew が無いMac: nmap.org 公式のインストーラーを取得し、公式が公開している SHA-256 と
-    照合してから入れます（不一致なら中止）。macOS のパスワード入力画面が出ます。
-    入るのは nmap 本体だけです（Zenmap などの付属アプリは入れません）。
-    nmap 公式版は Intel 用のため、Apple Silicon の Mac では Apple の Rosetta 2 も一緒に入ります。
-  ターミナルからなら:  KEKKAI.app/Contents/Resources/kekkai/kekkai install-nmap
+■ nmap（詳細診断）— 自動で入ります（操作は不要）
+  LANの機器で動いているソフトの名前と版を調べ、脆弱性診断の精度を上げる道具です。
+  KEKKAI が起動して1分ほどで、nmap が無ければ自動で入れ、この Mac で動くかを確かめ、
+  脆弱性診断をやり直します。結果は「防御機能の稼働状況」→「Nmap 詳細診断」に出ます。
+  ・Homebrew が入っているMac: brew install nmap を自動で実行。
+  ・それ以外: nmap.org 公式の配布物を取得し、公式が公開している SHA-256 と照合してから
+    （不一致なら中止）、KEKKAI のフォルダの中に展開します。システムには入れないので
+    パスワードは要りません。
+  ・例外: Apple Silicon の Mac で Apple の Rosetta 2 が入っていない場合だけ、nmap 公式版
+    （Intel 用）を動かすために、macOS のパスワード画面が1回出ます（Rosetta 2 は Apple 公式）。
+  ・自動で入れたくない場合: 設定 tools.auto_install_nmap を false に。
 
 ■ 脆弱性診断
   ダッシュボード左の「脆弱性診断」→「今すぐ診断」（数分）。週1回は自動で実施します。
@@ -62,7 +63,7 @@
   ・アプリ: アプリケーションから KEKKAI.app をゴミ箱へ。
   ・常時パケット監視: 「パケット監視を解除する（要パスワード）.command」を実行。
   ・データ: ~/Library/Application Support/KEKKAI
-  ・nmap（公式版を入れた場合）: アプリケーションの nmap.app をゴミ箱へ。
+  ・nmap: 上の「データ」フォルダの中の tools/nmap.app（KEKKAI が入れたもの）。
 
 This product uses the NVD API but is not endorsed or certified by the NVD.
 バージョン: @VERSION@

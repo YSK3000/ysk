@@ -195,9 +195,9 @@ def cmd_setup(a: argparse.Namespace) -> int:
         rep = FeedSet().update(cfg.get("intel.feeds"), force=True)
         print("  [4/4] 脅威フィード …", ", ".join("%s=%s" % kv for kv in rep.items()))
         from kekkai import tools
-        if IS_MACOS and not tools.nmap_status()["installed"] and sys.stdin.isatty():
-            print("\n  nmap（LAN機器のサービスと版を特定し、脆弱性診断の精度を上げる）が入っていません。")
-            cmd_install_nmap(argparse.Namespace(method=None, yes=False, json=False, terminal=True))
+        if IS_MACOS and not tools.nmap_status()["installed"]:
+            print("\n  [+]   nmap（LAN機器のサービスと版を特定）を自動で入れます（パスワード不要の場所へ）")
+            cmd_install_nmap(argparse.Namespace(method=None, yes=True, json=False, terminal=sys.stdin.isatty()))
     print("\n  自己診断:")
     worst = doctor.print_report(doctor.run_checks(cfg, quick=True), COLOR)
     if not IS_MACOS or a.no_agent:
@@ -234,6 +234,10 @@ def cmd_install_nmap(a: argparse.Namespace) -> int:
         os.environ["KEKKAI_PRIV"] = "sudo-tty"   # password typed in this Terminal window (sudo)
     if method == "brew":
         print("  Homebrew で nmap を入れます（パスワード不要・1〜5分）。")
+    elif method == "local":
+        print("  nmap.org 公式の配布物を取得し、公式の SHA-256 と照合して KEKKAI のフォルダに展開します（パスワード不要）。")
+        if st["needs_rosetta"]:
+            print("   ・nmap 公式版は Intel 用のため、Apple の Rosetta 2 を入れます（このときだけパスワードが必要）")
     else:
         print("  nmap.org 公式のインストーラーで nmap を入れます。")
         print("   ・公式サイトから取得し、公式が公開している SHA-256 と照合します（不一致なら中止）")
@@ -753,7 +757,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_portscan)
     s = sub.add_parser("install-nmap", help="nmap（詳細診断）を公式の配布元から入れる（macOS）")
-    s.add_argument("--method", choices=("brew", "pkg"), help="brew=Homebrew / pkg=nmap.org 公式インストーラー（既定: 自動）")
+    s.add_argument("--method", choices=("brew", "local", "pkg"),
+                   help="brew=Homebrew / local=nmap.org 公式版を KEKKAI のフォルダへ（パスワード不要） / pkg=システムへ（既定: 自動）")
     s.add_argument("--yes", action="store_true", help="確認せずに実行")
     s.add_argument("--terminal", action="store_true", help="パスワードをこのターミナルで入力する（sudo）")
     s.add_argument("--json", action="store_true")

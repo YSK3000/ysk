@@ -27,7 +27,7 @@ from kekkai.notify import Notifier
 from kekkai.platforms import get_platform
 from kekkai.platforms.base import Connection, LanContext
 from kekkai.store import Store
-from kekkai.util import FetchError, log
+from kekkai.util import IS_MACOS, FetchError, log
 
 DEFAULT_HOME = {"lat": None, "lon": None, "label": "HOME", "source": "unknown"}
 
@@ -664,7 +664,8 @@ class Monitor:
             res = (self._install_nmap or tools.install_nmap)(progress=say, prefer=method)
             if not res.get("ok") and res.get("admin_failed"):
                 # The macOS password dialog could not be shown from the background monitor: finish in Terminal.
-                opened, why = (self._open_terminal_install or tools.open_terminal_install)()
+                opened, why = (self._open_terminal_install or tools.open_terminal_install)(
+                    method="pkg" if res.get("method") == "pkg" else "local")
                 if opened:
                     say("ターミナルを開きました。ターミナルの表示に従ってパスワードを入力してください（最大15分待ちます）…")
                     deadline = time.time() + 900
@@ -672,8 +673,7 @@ class Monitor:
                         if self._stop.wait(3):
                             break
                     if self._deep_available():
-                        from kekkai.util import find_cmd
-                        res = {"ok": True, "method": "pkg-terminal", "path": find_cmd("nmap"), "version": tools.nmap_version()}
+                        res = {"ok": True, "method": "terminal", "path": tools._nmap_exe(), "version": tools.nmap_version()}
                     else:
                         res = dict(res, error="ターミナルでの導入が終わりませんでした（15分）。ターミナルの表示を確認してください")
                 else:
@@ -706,6 +706,33 @@ class Monitor:
                      None if res.get("ok") else (res.get("failed") or {}).get("detail"))
         self.bus.publish("tools", {"tool": "nmap", "running": False, "check": res})
         return res
+
+    def nmap_auto_cycle(self) -> Optional[Dict[str, Any]]:
+        """macOS: install nmap by itself when it is missing, prove it works, then re-run the assessment.
+
+        The user asked KEKKAI to do this without them: no button, no password (except Apple's Rosetta 2 on an
+        Apple Silicon Mac that lacks it). A failed attempt is retried after 6 hours (7 days after a cancel).
+        """
+        if not IS_MACOS or not self.cfg.get("tools.auto_install_nmap", True) or self._deep_available():
+            return None
+        if (self.state.get("nmap_install") or {}).get("running"):
+            return None
+        last = self.store.kv_get("nmap_auto_last") or {}
+        wait = 7 * 86400 if last.get("cancelled") else 6 * 3600
+        if last.get("ts") and time.time() - float(last["ts"]) < wait:
+            return None
+        res = self.install_nmap()
+        self.store.kv_set("nmap_auto_last", {"ts": time.time(), "ok": bool(res.get("ok")),
+                                             "cancelled": bool(res.get("cancelled")), "error": res.get("error")})
+        if res.get("ok") and not self.state.get("vulnscan_running"):
+            threading.Thread(target=self._safe_vulnscan, daemon=True, name="kekkai-vulnscan-after-nmap").start()
+        return res
+
+    def _safe_vulnscan(self) -> None:
+        try:
+            self.run_vulnscan()
+        except Exception:  # noqa: BLE001 - recorded in health by run_vulnscan
+            log.exception("vulnscan after nmap install failed")
 
     def nmap_check_cycle(self) -> Optional[Dict[str, Any]]:
         """Daily: re-prove nmap still works (macOS updates and permission changes can break it silently)."""
@@ -936,6 +963,7 @@ class Monitor:
             ("intel", self.intel_cycle, lambda: 3600.0, 2.0),
             ("leak", self.leak_cycle, lambda: float(c.get("monitor.leak_check_interval_sec", 86400)), 30.0),
             ("vulnscan", self.vulnscan_cycle, lambda: float(c.get("monitor.vulnscan_interval_sec", 604800)), 180.0),
+            ("nmap_auto", self.nmap_auto_cycle, lambda: 3600.0, 20.0),
             ("nmap_check", self.nmap_check_cycle, lambda: 86400.0, 45.0),
             ("sensor", self.sensor_cycle, lambda: 3.0, 3.0),
             ("prune", self.store.prune, lambda: 86400.0, 60.0),

@@ -21,7 +21,7 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from kekkai.util import IS_MACOS, FetchError, find_cmd, http_get, log
+from kekkai.util import IS_MACOS, FetchError, http_get, log
 
 NMAP_DOWNLOAD_PAGE = "https://nmap.org/download.html"
 NMAP_DIST = "https://nmap.org/dist/"
@@ -54,13 +54,18 @@ def nmap_version(path: Optional[str] = None) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _nmap_exe() -> Optional[str]:
+    from kekkai.discovery.nmap import command
+    return command()[0]
+
+
 def nmap_status() -> Dict[str, Any]:
-    exe = find_cmd("nmap")
+    exe = _nmap_exe()
     brew = brew_path()
-    method = None if exe else ("brew" if brew else "pkg")
+    method = None if exe else ("brew" if brew else "local")
+    rosetta = method == "local" and not rosetta_ready()
     return {"installed": bool(exe), "path": exe, "version": nmap_version(exe) if exe else None,
-            "method": method, "needs_password": method == "pkg",
-            "needs_rosetta": method == "pkg" and not rosetta_ready(), "supported": IS_MACOS}
+            "method": method, "needs_password": rosetta, "needs_rosetta": rosetta, "supported": IS_MACOS}
 
 
 def latest_dmg(page: str) -> Optional[str]:
@@ -160,7 +165,7 @@ def choice_changes(xml_text: str) -> Optional[bytes]:
     return plistlib.dumps(out) if out else None
 
 
-def osascript_cmd(steps: List[List[str]], admin: bool = True) -> List[str]:
+def osascript_cmd(steps: List[List[str]], admin: bool = True, prompt: Optional[str] = None) -> List[str]:
     """One osascript call that runs `steps` (joined with &&), each word AppleScript-quoted from argv.
 
     With admin=True macOS shows its standard administrator dialog (one prompt for every step).
@@ -175,8 +180,8 @@ def osascript_cmd(steps: List[List[str]], admin: bool = True) -> List[str]:
         parts.append(" & \" \" & ".join(words))
     line = "do shell script " + " & \" && \" & ".join(parts)
     if admin:
-        line += (" with prompt \"KEKKAI: nmap（nmap.org 公式）を入れます。"
-                 "Macのログインパスワードを入力してください。\" with administrator privileges")
+        text = (prompt or "KEKKAI: nmap（nmap.org 公式）を入れます。Macのログインパスワードを入力してください。")
+        line += " with prompt \"%s\" with administrator privileges" % text.replace("\\", "").replace('"', "”")
     cmd = ["/usr/bin/osascript"]
     for x in ("on run argv", line, "end run"):
         cmd += ["-e", x]
@@ -184,11 +189,7 @@ def osascript_cmd(steps: List[List[str]], admin: bool = True) -> List[str]:
 
 
 def _admin_install(pkg: str, choices: Optional[str] = None, rosetta: bool = False) -> Tuple[int, str]:
-    """Run Apple's installer as root through the standard macOS administrator dialog.
-
-    KEKKAI_PRIV=sudo (CI only) uses non-interactive sudo instead, since nobody can type a password there.
-    Paths are passed as arguments (quoted form), never spliced into the script, and must be plain paths.
-    """
+    """Run Apple's installer (and softwareupdate for Rosetta) as root through the macOS administrator dialog."""
     for path in (pkg, choices):
         if path and not _SAFE_PATH.match(path):
             return 2, "unsafe path: %r" % path
@@ -199,8 +200,18 @@ def _admin_install(pkg: str, choices: Optional[str] = None, rosetta: bool = Fals
     if choices:
         inst += ["-applyChoiceChangesXML", choices]
     steps.append(inst)
-    if os.environ.get("KEKKAI_PRIV") == "sudo-tty":
-        # Terminal route: sudo asks for the password in the Terminal window the user is looking at
+    return _admin_run(steps)
+
+
+def _admin_run(steps: List[List[str]], prompt: Optional[str] = None) -> Tuple[int, str]:
+    """Run privileged steps: the standard macOS administrator dialog by default.
+
+    KEKKAI_PRIV=sudo (CI only) uses non-interactive sudo, since nobody can type a password there;
+    KEKKAI_PRIV=sudo-tty (the Terminal route) lets sudo ask in the Terminal window the user is looking at.
+    Every word is passed as an argument (AppleScript `quoted form`), never spliced into a script.
+    """
+    priv = os.environ.get("KEKKAI_PRIV")
+    if priv == "sudo-tty":
         for step in steps:
             try:
                 rc = subprocess.run(["/usr/bin/sudo"] + step, timeout=1800).returncode
@@ -209,7 +220,7 @@ def _admin_install(pkg: str, choices: Optional[str] = None, rosetta: bool = Fals
             if rc != 0:
                 return rc, "sudo %s が失敗（rc=%s）" % (step[0], rc)
         return 0, ""
-    if os.environ.get("KEKKAI_PRIV") == "sudo":
+    if priv == "sudo":
         log_out = []
         for step in steps:
             try:
@@ -220,7 +231,7 @@ def _admin_install(pkg: str, choices: Optional[str] = None, rosetta: bool = Fals
             if p.returncode != 0:
                 return p.returncode, "\n".join(log_out)[-600:]
         return 0, "\n".join(log_out)[-600:]
-    cmd = osascript_cmd(steps)
+    cmd = osascript_cmd(steps, prompt=prompt)
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     except (OSError, subprocess.SubprocessError) as e:
@@ -243,45 +254,116 @@ def _install_brew(brew: str, progress: Progress) -> Dict[str, Any]:
     return {"ok": True, "method": "brew", "source": "Homebrew (formulae.brew.sh/formula/nmap)"}
 
 
-def _install_pkg(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any]:
+def _official_package(progress: Progress, fetch: Callable[..., Any], work: str, method: str) -> Dict[str, Any]:
+    """Download nmap.org's macOS image, check it against nmap.org's SHA-256, mount it and judge the package."""
     progress("nmap.org から最新版を確認しています…")
     status, _, body = fetch(NMAP_DOWNLOAD_PAGE, timeout=60, max_bytes=4 * 1024 * 1024)
     if status != 200:
         raise FetchError("download page HTTP %s" % status)
     dmg = latest_dmg(body.decode("utf-8", "replace"))
     if not dmg:
-        return {"ok": False, "method": "pkg", "error": "nmap.org のダウンロードページに macOS 版が見つかりません"}
+        return {"ok": False, "method": method, "error": "nmap.org のダウンロードページに macOS 版が見つかりません"}
     status, _, dig = fetch(NMAP_DIST + "sigs/" + dmg + ".digest.txt", timeout=60, max_bytes=256 * 1024)
     want = digest_sha256(dig.decode("utf-8", "replace"), dmg) if status == 200 else None
     if not want:
-        return {"ok": False, "method": "pkg", "error": "公式のチェックサム（%s.digest.txt）を取得できません" % dmg}
-    work = tempfile.mkdtemp(prefix="kekkai-nmap-")
+        return {"ok": False, "method": method, "error": "公式のチェックサム（%s.digest.txt）を取得できません" % dmg}
+    progress("%s をダウンロードしています…" % dmg)
+    status, _, data = fetch(NMAP_DIST + dmg, timeout=600, max_bytes=MAX_DMG_BYTES)
+    if status != 200:
+        raise FetchError("%s HTTP %s" % (dmg, status))
+    path = os.path.join(work, dmg)
+    with open(path, "wb") as f:
+        f.write(data)
+    got = _sha256(path)
+    if got != want:
+        return {"ok": False, "method": method, "error": "チェックサム不一致（改ざんの可能性）。中止しました"}
+    progress("チェックサム一致。中身を確認しています…")
     mnt = os.path.join(work, "mnt")
+    os.mkdir(mnt)
+    p = subprocess.run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mnt, path],
+                       capture_output=True, text=True, timeout=180)
+    if p.returncode != 0:
+        return {"ok": False, "method": method, "error": "ディスクイメージを開けません: %s" % p.stderr.strip()[-300:]}
+    pkgs = sorted(n for n in os.listdir(mnt) if n.endswith((".pkg", ".mpkg")))
+    if not pkgs:
+        return {"ok": False, "method": method, "error": "ディスクイメージにインストーラーがありません"}
+    pkg = os.path.join(mnt, pkgs[0])
+    sig = subprocess.run(["/usr/sbin/pkgutil", "--check-signature", pkg], capture_output=True, text=True, timeout=60)
+    ok, who = check_pkg_signature(sig.stdout + sig.stderr)
+    if not ok:
+        return {"ok": False, "method": method, "error": who}
+    return {"ok": True, "dmg": dmg, "sha256": got, "pkg": pkg, "mnt": mnt, "signer": who}
+
+
+def _detach(work: str) -> None:
+    mnt = os.path.join(work, "mnt")
+    if os.path.ismount(mnt):
+        subprocess.run(["/usr/bin/hdiutil", "detach", "-force", mnt], capture_output=True, timeout=120)
+    shutil.rmtree(work, ignore_errors=True)
+
+
+def find_app_in(tree: str) -> Optional[str]:
+    """The nmap.app (with its bundled binary) inside an expanded package."""
+    for d, dirs, _files in os.walk(tree):
+        for name in dirs:
+            if name == "nmap.app" and os.path.isfile(os.path.join(d, name, "Contents", "Resources", "bin", "nmap")):
+                return os.path.join(d, name)
+    return None
+
+
+def _install_local(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any]:
+    """No-password route: unpack nmap.org's package and keep nmap.app in KEKKAI's own folder.
+
+    `pkgutil --expand-full` (no root) gives the package's files; the installer's scripts are not run and
+    nothing outside the user's KEKKAI folder is touched. Only Rosetta 2, which Apple installs system-wide,
+    needs the administrator password, and only on Apple Silicon Macs that do not have it yet.
+    """
+    from kekkai.discovery.nmap import local_app
+    work = tempfile.mkdtemp(prefix="kekkai-nmap-")
     try:
-        progress("%s をダウンロードしています…" % dmg)
-        status, _, data = fetch(NMAP_DIST + dmg, timeout=600, max_bytes=MAX_DMG_BYTES)
-        if status != 200:
-            raise FetchError("%s HTTP %s" % (dmg, status))
-        path = os.path.join(work, dmg)
-        with open(path, "wb") as f:
-            f.write(data)
-        got = _sha256(path)
-        if got != want:
-            return {"ok": False, "method": "pkg", "error": "チェックサム不一致（改ざんの可能性）。中止しました"}
-        progress("チェックサム一致。署名を確認しています…")
-        os.mkdir(mnt)
-        p = subprocess.run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mnt, path],
-                           capture_output=True, text=True, timeout=180)
-        if p.returncode != 0:
-            return {"ok": False, "method": "pkg", "error": "ディスクイメージを開けません: %s" % p.stderr.strip()[-300:]}
-        pkgs = sorted(n for n in os.listdir(mnt) if n.endswith((".pkg", ".mpkg")))
-        if not pkgs:
-            return {"ok": False, "method": "pkg", "error": "ディスクイメージにインストーラーがありません"}
-        pkg = os.path.join(mnt, pkgs[0])
-        sig = subprocess.run(["/usr/sbin/pkgutil", "--check-signature", pkg], capture_output=True, text=True, timeout=60)
-        ok, who = check_pkg_signature(sig.stdout + sig.stderr)
-        if not ok:
-            return {"ok": False, "method": "pkg", "error": who}
+        got = _official_package(progress, fetch, work, "local")
+        if not got.get("ok"):
+            return got
+        progress("パスワード不要の場所（KEKKAI のフォルダ）に展開しています…")
+        tree = os.path.join(work, "expanded")
+        p = subprocess.run(["/usr/sbin/pkgutil", "--expand-full", got["pkg"], tree], capture_output=True, text=True,
+                           timeout=600)
+        app = find_app_in(tree) if p.returncode == 0 else None
+        if not app:
+            return {"ok": False, "method": "local", "error": "インストーラーを展開できません: %s" % (
+                (p.stderr or p.stdout).strip()[-300:] or "nmap.app が見つかりません")}
+        dest = local_app()
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        staging = dest + ".new"
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(app, staging, symlinks=True)
+        shutil.rmtree(dest, ignore_errors=True)
+        os.rename(staging, dest)
+        res = {"ok": True, "method": "local", "source": NMAP_DIST + got["dmg"], "sha256": got["sha256"],
+               "signer": got["signer"], "installed_to": dest}
+        if not rosetta_ready():
+            progress("nmap 公式版は Intel 用のため、Apple の Rosetta 2 を入れます。macOS のパスワード画面が出たら入力してください…")
+            rc, out = _admin_run([["/usr/sbin/softwareupdate", "--install-rosetta", "--agree-to-license"]],
+                                 "KEKKAI: nmap を動かすために Apple の Rosetta 2 を入れます。Macのログインパスワードを入力してください。")
+            if rc != 0:
+                cancelled = "-128" in out or "User canceled" in out or "キャンセル" in out
+                return dict(res, ok=False, cancelled=cancelled, rosetta_needed=True, admin_failed=not cancelled,
+                            error="nmap は入りましたが、動かすのに必要な Rosetta 2 を入れられませんでした（%s）" % (
+                                "取り消し" if cancelled else out))
+            res["rosetta_installed"] = True
+        return res
+    finally:
+        _detach(work)
+
+
+def _install_pkg(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any]:
+    """System route (/Applications, administrator password): kept for `kekkai install-nmap --method pkg`."""
+    work = tempfile.mkdtemp(prefix="kekkai-nmap-")
+    try:
+        got = _official_package(progress, fetch, work, "pkg")
+        if not got.get("ok"):
+            return got
+        pkg, who = got["pkg"], got["signer"]
         choices = None
         shown = subprocess.run(["/usr/sbin/installer", "-showChoiceChangesXML", "-pkg", pkg],
                                capture_output=True, text=True, timeout=60)
@@ -302,42 +384,47 @@ def _install_pkg(progress: Progress, fetch: Callable[..., Any]) -> Dict[str, Any
                     "error": "インストールを取り消しました" if cancelled else
                     "インストーラーが失敗: %s（ターミナルで KEKKAI.app/Contents/Resources/kekkai/kekkai install-nmap "
                     "を実行しても導入できます）" % out}
-        return {"ok": True, "method": "pkg", "source": NMAP_DIST + dmg, "sha256": got, "signer": who,
+        return {"ok": True, "method": "pkg", "source": NMAP_DIST + got["dmg"], "sha256": got["sha256"], "signer": who,
                 "rosetta_installed": need_rosetta, "only_nmap": bool(choices)}
     finally:
-        if os.path.ismount(mnt):
-            subprocess.run(["/usr/bin/hdiutil", "detach", "-force", mnt], capture_output=True, timeout=120)
-        shutil.rmtree(work, ignore_errors=True)
+        _detach(work)
 
 
 def install_nmap(progress: Optional[Progress] = None, fetch: Callable[..., Any] = http_get,
                  prefer: Optional[str] = None) -> Dict[str, Any]:
-    """Install nmap. Returns {"ok", "method", "path", "version", "error"?, "source"?}. Never raises."""
+    """Install nmap. Returns {"ok", "method", "path", "version", "error"?, "source"?}. Never raises.
+
+    Default route: Homebrew when present (native build, no password), otherwise nmap.org's package unpacked
+    into KEKKAI's folder (no password). `prefer="pkg"` installs system-wide into /Applications instead.
+    """
     say: Progress = progress or (lambda s: None)
     t0 = time.time()
     if not IS_MACOS:
         return {"ok": False, "error": "macOS 専用です（Linux はディストリビューションのパッケージで導入）"}
-    if find_cmd("nmap") and prefer is None:
-        return {"ok": True, "method": "present", "path": find_cmd("nmap"), "version": nmap_version(), "already": True}
+    if _nmap_exe() and prefer is None:
+        return {"ok": True, "method": "present", "path": _nmap_exe(), "version": nmap_version(), "already": True}
     brew = brew_path()
+    route = prefer or ("brew" if brew else "local")
     try:
-        if (prefer or ("brew" if brew else "pkg")) == "brew" and brew:
+        if route == "brew" and brew:
             res = _install_brew(brew, say)
-        else:
+        elif route == "pkg":
             res = _install_pkg(say, fetch)
+        else:
+            res = _install_local(say, fetch)
     except FetchError as e:
-        res = {"ok": False, "method": "pkg", "error": "nmap.org に接続できません: %s" % e}
+        res = {"ok": False, "method": route, "error": "nmap.org に接続できません: %s" % e}
     except (OSError, subprocess.SubprocessError) as e:
         log.exception("nmap install failed")
-        res = {"ok": False, "error": "導入中にエラー: %s" % e}
-    exe = find_cmd("nmap")
+        res = {"ok": False, "method": route, "error": "導入中にエラー: %s" % e}
+    exe = _nmap_exe()
     if res.get("ok") and not exe:
         res = dict(res, ok=False, error="導入は終わりましたが nmap が見つかりません")
     res.update({"path": exe, "version": nmap_version(exe) if exe else None, "duration": round(time.time() - t0, 1)})
     return res
 
 
-def open_terminal_install() -> Tuple[bool, str]:
+def open_terminal_install(method: str = "local") -> Tuple[bool, str]:
     """Continue the install in a Terminal window (password typed there), when the macOS dialog could not be used.
 
     The script is written by KEKKAI into its own data folder (not downloaded, so Gatekeeper does not stop it)
@@ -352,9 +439,9 @@ def open_terminal_install() -> Tuple[bool, str]:
     body = ("#!/bin/sh\n"
             "echo 'KEKKAI: nmap（nmap.org 公式）を入れます。'\n"
             "echo 'Macのログインパスワードを入力して return を押してください（入力中の文字は表示されません）。'\n"
-            "%s install-nmap --yes --terminal --method pkg\n"
+            "%s install-nmap --yes --terminal --method %s\n"
             "echo; echo '--- 終わりました。このウインドウは閉じて構いません（KEKKAI の画面に結果が出ます）---'\n"
-            % shlex.quote(launcher))
+            % (shlex.quote(launcher), shlex.quote(method)))
     with open(str(script), "w", encoding="utf-8") as f:
         f.write(body)
     os.chmod(str(script), 0o700)
