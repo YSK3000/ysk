@@ -13,6 +13,15 @@ $PY -c "from kekkai import tools; print('apple_silicon=%s rosetta_ready=%s' % (t
 
 echo "==== A) no user action: start KEKKAI on a Mac without nmap and wait — it must install nmap by itself"
 echo "        (no password: KEKKAI_PRIV is unset, so any administrator dialog would hang and fail this step)"
+# GitHub's runners have Homebrew; most home Macs do not. Hide it here so the password-free route is the one tested
+# (the Homebrew route is tested by the smoke job). It is put back right after this step, and on exit.
+HIDDEN=""
+for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+  [ -e "$b" ] && sudo mv "$b" "$b.kekkai-ci-hidden" && HIDDEN="$HIDDEN $b"
+done
+restore_brew() { for b in $HIDDEN; do [ -e "$b.kekkai-ci-hidden" ] && sudo mv "$b.kekkai-ci-hidden" "$b"; done; HIDDEN=""; }
+trap restore_brew EXIT
+$PY -c "from kekkai import tools; print('brew visible to KEKKAI:', tools.brew_path())"
 AUTOHOME=$(mktemp -d)
 env -u KEKKAI_PRIV KEKKAI_HOME="$AUTOHOME" $PY -m kekkai serve --no-browser > "$AUTOHOME/serve.log" 2>&1 &
 SERVE=$!
@@ -55,6 +64,7 @@ assert cov.get("nmap"), "assessment did not re-run with nmap"
 print("PASS KEKKAI installed nmap by itself (no password), proved it works and re-ran the assessment")
 PY
 kill $SERVE 2>/dev/null; wait $SERVE 2>/dev/null
+restore_brew
 
 echo "==== 1) kekkai install-nmap --method pkg (nmap.org official installer, system-wide)"
 OUT=$(mktemp)
