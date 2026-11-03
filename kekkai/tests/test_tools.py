@@ -350,6 +350,23 @@ class SelfTestTest(unittest.TestCase):
         self.assertTrue(res["ok"], tools.selftest_lines(res))
 
 
+class BannerListenerTest(unittest.TestCase):
+    def test_survives_clients_that_reset_at_once(self):
+        """nmap's connect scan resets immediately (EPIPE on macOS); the test service must keep answering."""
+        import socket
+        import struct
+        srv, port, stop = tools._banner_listener()
+        self.addCleanup(srv.close)
+        self.addCleanup(stop.set)
+        for _ in range(5):
+            c = socket.create_connection(("127.0.0.1", port), timeout=2)
+            c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))   # close with RST
+            c.close()
+        c = socket.create_connection(("127.0.0.1", port), timeout=3)
+        self.addCleanup(c.close)
+        self.assertEqual(c.recv(64), tools._FAKE_BANNER)
+
+
 class CoverageEvidenceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

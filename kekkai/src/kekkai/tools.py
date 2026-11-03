@@ -386,15 +386,19 @@ def _banner_listener() -> Tuple[Any, int, Any]:
                 c, _ = srv.accept()
             except OSError:
                 continue
+            # nmap's port scan connects and resets at once; on macOS writing to that socket raises EPIPE.
+            # Every connection error must be swallowed so the service stays up for the version probe.
             try:
                 c.sendall(_FAKE_BANNER)
                 c.settimeout(2)
+                c.recv(1024)
+            except OSError:
+                pass
+            finally:
                 try:
-                    c.recv(1024)
+                    c.close()
                 except OSError:
                     pass
-            finally:
-                c.close()
     threading.Thread(target=serve, daemon=True, name="kekkai-nmap-selftest").start()
     return srv, srv.getsockname()[1], stop
 
